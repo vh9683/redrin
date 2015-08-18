@@ -26,7 +26,7 @@ class SignupHandler(tornado.web.RequestHandler):
     if 'X-Mandrill-Signature' in self.request.headers:
       rcvdsignature = self.request.headers['X-Mandrill-Signature']
     else:
-      gen_log.info('Invalid post from ' + self.request.remote_ip)
+      gen_log.info('Invalid post from ' + self.request.headers['X-Real-IP'])
       return False
     data = self.request.full_url()
     argkeys = sorted(self.request.arguments.keys())
@@ -54,7 +54,7 @@ class SignupHandler(tornado.web.RequestHandler):
     if self.authenticatepost():
       gen_log.info('post authenticated successfully')
     else:
-      gen_log.info('post authentication failed, remote ip ' + self.request.remote_ip)
+      gen_log.info('post authentication failed, remote ip ' + self.request.headers['X-Real-IP'])
       self.set_status(400)
       self.write('Bad Request')
       self.finish()
@@ -101,7 +101,7 @@ class RecvHandler(tornado.web.RequestHandler):
     if 'X-Mandrill-Signature' in self.request.headers:
       rcvdsignature = self.request.headers['X-Mandrill-Signature']
     else:
-      gen_log.info('Invalid post from ' + self.request.remote_ip)
+      gen_log.info('Invalid post from ' + self.request.headers['X-Real-IP'])
       return False
     data = self.request.full_url()
     argkeys = sorted(self.request.arguments.keys())
@@ -125,7 +125,7 @@ class RecvHandler(tornado.web.RequestHandler):
     if self.authenticatepost():
       gen_log.info('post authenticated successfully')
     else:
-      gen_log.info('post authentication failed, remote ip ' + self.request.remote_ip)
+      gen_log.info('post authentication failed, remote ip ' + self.request.headers['X-Real-IP'])
       self.set_status(400)
       self.write('Bad Request')
       self.finish()
@@ -168,10 +168,52 @@ class RecvHandler(tornado.web.RequestHandler):
    return
  
 class TokenHandler(tornado.web.RequestHandler):
+  def prepare(self):
+    rclient = self.settings['rclient']
+    badreq = rclient.get(self.request.headers['X-Real-IP'])
+    if badreq:
+      self.finish()
+    return None
+
+  @coroutine
   def get(self,token):
     folder = Path(FOLDER_ROOT_DIR+token)
     if folder.exists():
       self.render(token+'/index.html')
+      return
+    redrdb = self.settings['redrdb']
+    valid = yield redrdb.tokens.find_one({'token': token})
+    if valid:
+      self.finish()
+      return
+    else:
+      gen_log.info('invalid access from ' + self.request.headers['X-Real-IP'])
+      rclient.setex(self.request.headers['X-Real-IP'],600,pickle.dumps('BadGuy'))
+      self.finish()
+      return
+
+class ApiHandler(tornado.web.RequestHandler):
+  @coroutine
+  def get(self):
+    apikey = self.get_argument('apikey',False)
+    if not apikey:
+      self.write({'status': 400})
+      self.finish()
+      return
+    redrdb = self.settings['redrdb']
+    client = yield redrdb.clients.find_one({'apikey': apikey})
+    if not client:
+      self.write({'status': 400})
+      self.finish()
+      return
+    tokenfactory = self.settings['tokenfactory']
+    token = tokenfactory.create_temp_dir().path
+    reused = yield redrdb.tokens.find_one({'token': token})
+    if not reused:
+      yield redrdb.tokens.insert({'token': token})
+    self.write({'status': 200, 'url': self.request.host + '/' + token})
+    self.finish()
+    return
 
 logging.basicConfig(stream=sys.stdout,level=logging.DEBUG)
 
