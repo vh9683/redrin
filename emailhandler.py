@@ -1,5 +1,6 @@
 #! /usr/bin/python3.4
 
+import os
 import sys
 import re
 import base64
@@ -16,26 +17,22 @@ from email.utils import parseaddr
 from redis import StrictRedis
 from validate_email import validate_email
 import argparse
+import shutil
+import subprocess
 
 FILESIZE=1024*1024*1024 #1MB
 
+mhcmd = 'mhonarc -nothread -nomultipg -nomain -noprintxcomments -quiet -single -nomailto '
+
 instance = "0"
-try:
-  conn=pymongo.MongoClient()
-  print ("Connected successfully!!!")
-except pymongo.errors.ConnectionFailure as e:
-  print ("Could not connect to MongoDB: %s" % e )
 
 logger = logging.getLogger('mailHandler')
 
-OUR_DOMAIN = 'redr.in'
-
-db = conn.inbounddb
+OUR_DOMAIN = "redr.in"
+FOLDER_ROOT_DIR = "/tmp/redr/"
 
 #below regex objs are for handling new thread mails
-taddrcomp = re.compile('([\w.-]+(__)[\w.-]+)@'+OUR_DOMAIN)
-
-subcomp = re.compile('__')
+taddrcomp = re.compile('([\w.-]+)@'+OUR_DOMAIN)
 
 rclient = StrictRedis()
 
@@ -47,21 +44,6 @@ def getuserid(a):
 
 def isourdomain( a):
   return getdomain(a) == OUR_DOMAIN
-
-def isknowndomain(a):
-  if isourdomain(a):
-    return True
-  known = db.domains.find_one({'domain': getdomain(a)})
-  if not known:
-    return False
-  return True
-
-def getuser(a):
-  if isourdomain(a):
-    user = db.users.find_one({'mapped': a})
-  else:
-    user = db.users.find_one({'actual': a})
-  return user
 
 def valid_uuid4(a):
   userid = getuserid(a)
@@ -82,39 +64,90 @@ def isregistereduser(a):
   """ check whether the user address is a registered one or generated one """
   return not valid_uuid4(a)
 
-def valid_email_addresses (msg,allrecipients,from_email):
-  for id,name in allrecipients:
-    success = isregistereduser(id)
-    if success:
-      return True
-  success =  getuser(from_email)
-  if success:
-    return True
-  return False
- 
-def isUserEmailTaggedForLI(a):
-  """ Check if the user address is tagged for LI """
-  user = getuser(a)
-  if user and 'tagged' in user: 
-    return user['tagged']
-  return None
+def processOpHtml (dstdir):
+  opfile = os.path.join(dstdir, 'op.html')
+  indexfile = os.path.join(dstdir, 'index.html')
+  
+  ignored = ['<em>Authentication-results</em>' , '<em>Delivered-to</em>', '<em>Dkim-signature</em>', '<em>In-reply-to</em>', '<em>References</em>', '<!--', '<!DOCTYPE HTML PUBLIC', "http://www.w3.org/TR/html4/loose.dtd" ]
+  
+  message = "<!DOCTYPE HTML>"
+  opfp = open(opfile, 'r')
+  for line in opfp:
+    found = False
+    for i in ignored:
+      if i in line:
+        found = True
+        break
 
-def getactual(a):
-  user = getuser(a)
-  if not user:
-    return None
-  return user['actual']
+    if found == False:
+      message += line.replace ('.//', '/')
+
+  opfp.close()
+
+  idfp = open(indexfile, 'w')
+  idfp.write(message)
+  idfp.close()
+
+  return True
+
 
 def emailHandler(ev, pickledEv):
   ''' 
     SPAM check is not done here ... it should have been handled in earlier stage of pipeline
   '''
-  emaildump = (ev['msg']['raw_msg'])
+  ev = emaildump
   
-  prepareEmailDisplay
-  
+  toaddresses = ev['msg']['to']
+  if len(toaddresses) != 1:
+    return False
+
+  to = toaddresses[0]
+
+  if not taddrcomp.fullmatch(to):
+    return False
+
+  if not isourdomain(to):
+    return False
  
-  #sendInvite(totalinvitercpts, fromname)
+  token = getuserid(to)
+  if not token:
+    return False
+  
+  tdata = rclient.get(token)
+  if not tdata:
+    return False
+
+  folder = tdata['folder']
+  if folder is None:
+    return False
+  
+  if not valid_uuid4(folder):
+    return False
+  
+  mhcmd += ' -attachmenturl ' + '/'+folder 
+
+  mhcmd += ' -iconurlprefix ' + '/'+folder 
+ 
+  dstdir = os.path.join (FOLDER_ROOT_DIR, folder)
+ 
+  try :
+    os.mkdir(dstdir, 0o700)
+  except FileExitsUser:
+    return False
+ 
+  #TODO make use of tempfile 
+  maildumpfile = os.path.join(dstdir, 'email.dump') 
+
+  edumpfp = open(maildumpfile, 'w')
+  edumpfp.write(ev['msg']['raw_msg'])
+  edumpfp.close()
+
+  mhcmd += ' ' + maildumpfile + ' ' + os.path.join(dstdir, 'op.html')
+  if not  subprocess.call(mhcmd):
+    return False
+    
+  processOpHtml(dstdir) 
+
   return True
 
 if __name__ == '__main__':
