@@ -1,2 +1,3 @@
-dir = $1
-mhonarc  -noprintxcomments -nothread -nomultipg -nomain -noprintxcomments -quiet -single -nomailto -attachmenturl /$1 -iconurlprefix /$1 > index.html 
+dir=$1
+input=$2
+mhonarc -noprintxcomments -nothread -nomultipg -nomain -noprintxcomments -quiet -single -nomailto -attachmenturl /$dir -iconurlprefix /$dir $input > index.html 
