@@ -190,11 +190,11 @@ class TokenHandler(tornado.web.RequestHandler):
     return None
 
   def get(self,token):
-    self.render('verify.html',token=token)
+    self.render('verify.html',url=self.request.uri)
 
   @coroutine
   def post(self,token):
-    pin = self.argument('pin',None)
+    pin = self.get_argument('pin',None)
     rclient = self.settings['rclient']
     if not pin:
       if 'X-Real-IP' in self.request.headers:
@@ -236,12 +236,13 @@ class ApiHandler(tornado.web.RequestHandler):
       return self.newtoken()
     return pickle.loads(token)
 
+  @coroutine
   def getpin(self,reused,token):
     tkey = reused['tkey']
     for seq in range(TMP_MAX):
       usecount = reused['usecount'] + 1
       pin = oath.hotp(tkey,usecount)
-      if pin not in reused['pins']:
+      if not 'pins' in reused or pin not in reused['pins']:
         yield redrdb.tokens.update({'token': token},{'$set': {'usecount': usecount}, '$push': {'pins': pin}})
         return pin
     return None
@@ -269,15 +270,16 @@ class ApiHandler(tornado.web.RequestHandler):
       usecount = 1
       tkey = uuid.uuid4().hex
       yield redrdb.tokens.insert({'token': token, 'usecount': usecount, 'tkey': tkey})
-    else:
-      pin = self.getpin(reused,token)
-      if not pin:
-        self.write({'status': 500})
-        self.finish()
-        return
+      reused = yield redrdb.tokens.find_one({'token': token})
+    pin = yield self.getpin(reused,token)
+    if not pin:
+      self.write({'status': 500})
+      self.finish()
+      return
     rclient = self.settings['rclient']
     folder = uuid.uuid4().hex
     tdata = {'pin': pin, 'folder': folder}
+    gen_log.info('tdata ' + str(tdata))
     rclient.setex(token,604800,pickle.dumps(tdata))
     rclient.setex(folder,604800,pickle.dumps(token))
     self.write({'status': 200, 'url': self.request.host + '/' + token, 'pin': pin})
@@ -288,7 +290,7 @@ class UrlHandler(tornado.web.RequestHandler):
   def get(self,folder):
     dir = Path(FOLDER_ROOT_DIR+folder+'/index.html')
     if dir.exists():
-      self.render(dir.resolve())
+      self.render(str(dir.resolve()))
     else:
       self.render('sorry.html',reason='Not Found')
     return
@@ -309,7 +311,7 @@ settings = {"static_path": FOLDER_ROOT_DIR,
 
 application = tornado.web.Application([
     (r"/([a-z]{4})", TokenHandler),
-    (r"([a-f0-9]{32})", UrlHandler),
+    (r"/([a-f0-9]{32})", UrlHandler),
     (r"/token", ApiHandler),
     (r"/mailer", RecvHandler),
     (r"/signup", SignupHandler),
