@@ -305,8 +305,8 @@ settings = {"static_path": FOLDER_ROOT_DIR,
             "template_path": 'html/',
             "redrdb": redrdb,
             "rclient": rclient,
-            "Mandrill_Auth_Key": {"/mailer": "27pZHL5IBNxJ_RS7PKdsMA",
-                                  "/signup": "ZWNZCpFTJLg7UkJCpEUv9Q"},
+            "Mandrill_Auth_Key": {"/mailer": "ruL49F78tETKF8bsFEFT0A",
+                                  "/signup": "40qQ1GnCxDZ4AEQ2_pul0Q"},
 }
 
 application = tornado.web.Application([
