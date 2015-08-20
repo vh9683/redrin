@@ -22,11 +22,12 @@ import subprocess
 
 FILESIZE=1024*1024*1024 #1MB
 
-mhcmd = 'mhonarc -nothread -nomultipg -nomain -noprintxcomments -quiet -single -nomailto '
+mhBaseCmd = 'mhonarc -nothread -nomultipg -nomain -noprintxcomments -quiet -single -nomailto '
 
 instance = "0"
 
 logger = logging.getLogger('mailHandler')
+logging.basicConfig(stream=sys.stdout,level=logging.DEBUG)
 
 OUR_DOMAIN = "redr.in"
 FOLDER_ROOT_DIR = "/tmp/redr/"
@@ -95,44 +96,56 @@ def emailHandler(ev, pickledEv):
   ''' 
     SPAM check is not done here ... it should have been handled in earlier stage of pipeline
   '''
-  ev = emaildump
+  logger.info("TESTING \n")
   
   toaddresses = ev['msg']['to']
   if len(toaddresses) != 1:
     return False
 
-  to = toaddresses[0]
+  to = toaddresses[0][0]
+
+  logger.info("To Address {} -> {}".format(toaddresses, to))
 
   if not taddrcomp.fullmatch(to):
+    logger.info("To Address comparision failed \n")
     return False
 
   if not isourdomain(to):
+    logger.info("Not Our Domain \n")
     return False
  
   token = getuserid(to)
   if not token:
+    logger.info("getuserid failed\n")
     return False
   
   tdata = rclient.get(token)
   if not tdata:
+    logger.info("No Data for token {}".format(token))
     return False
 
   folder = tdata['folder']
   if folder is None:
+    logger.info("No Folder {} Data for token {}".format(folder, token))
     return False
   
   if not valid_uuid4(folder):
+    logger.info("Folder {} is not valid uuid \n".format(folder))
     return False
   
+  mhcmd = str(mhBaseCmd)
+
   mhcmd += ' -attachmenturl ' + '/'+folder 
 
   mhcmd += ' -iconurlprefix ' + '/'+folder 
  
   dstdir = os.path.join (FOLDER_ROOT_DIR, folder)
  
+  logger.info("Destination folder : {} , url {}".format(dstdir, folder))
   try :
     os.mkdir(dstdir, 0o700)
   except FileExitsUser:
+    logger.info("Destination folder : {} exists".format(dstdir))
     return False
  
   #TODO make use of tempfile 
@@ -144,6 +157,7 @@ def emailHandler(ev, pickledEv):
 
   mhcmd += ' ' + maildumpfile + ' ' + os.path.join(dstdir, 'op.html')
   if not  subprocess.call(mhcmd):
+    logger.info("MHonArc failed , command [{}]\n".format(mhcmd))
     return False
     
   processOpHtml(dstdir) 
@@ -169,6 +183,7 @@ if __name__ == '__main__':
   while True:
     backupmail = False
     if (rclient.llen(redrmailhandlerBackup)):
+        logger.info("len of (" + redrmailhandlerBackup + " ) is {} ".format(rclient.llen(redrmailhandlerBackup)))
         ev = rclient.brpop (redrmailhandlerBackup)
         backupmail = True
         pickledEv = pickle.dumps(ev)
@@ -177,6 +192,7 @@ if __name__ == '__main__':
         pickledEv = rclient.brpoplpush('redrmailhandler', redrmailhandlerBackup)
         ev = pickle.loads(pickledEv)
         logger.info("Getting events from {}".format('redrmailhandler'))
+
     emailHandler(ev, pickledEv)
     if(not backupmail):
       logger.info ('len of {} is : {}'.format(redrmailhandlerBackup, rclient.llen(redrmailhandlerBackup)))
