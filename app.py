@@ -80,7 +80,9 @@ class SignupHandler(tornado.web.RequestHandler):
     ev = ev[0]
     from_email = ev['msg']['from_email']
     domain = self.getdomain(from_email)
-    if domain in baddomains:
+    redrdb = self.settings['redrdb']
+    baddomains = redrdb.baddomains.find({})
+    if not baddomains and domain in baddomains:
       msg = {'template_name': 'redrfailure', 'email': from_email, 'global_merge_vars': [{'name': 'reason', 'content': "This Domain is not Supported."}]}
       count = rclient.publish('mailer',pickle.dumps(msg))
       gen_log.info('message ' + str(msg))
@@ -89,7 +91,6 @@ class SignupHandler(tornado.web.RequestHandler):
       self.write({'status': 200})
       self.finish()
       return
-    redrdb = self.settings['redrdb']
     user = yield redrdb.clients.find_one({'domain': domain})
     if not user:
       apikey = uuid.uuid4().hex
@@ -295,6 +296,11 @@ class UrlHandler(tornado.web.RequestHandler):
       self.render('sorry.html',reason='Not Found')
     return
 
+
+class MainHandler(tornado.web.RequestHandler):
+  def get(self):
+    self.render("index.html")
+
 logging.basicConfig(stream=sys.stdout,level=logging.DEBUG)
 
 redrdb = MotorClient().redrdb
@@ -302,7 +308,7 @@ redrdb = MotorClient().redrdb
 rclient = StrictRedis()
 
 settings = {"static_path": FOLDER_ROOT_DIR,
-            "template_path": 'html/',
+            "template_path": os.path.join(FOLDER_ROOT_DIR, 'html'),
             "redrdb": redrdb,
             "rclient": rclient,
             "Mandrill_Auth_Key": {"/mailer": "ruL49F78tETKF8bsFEFT0A",
@@ -310,6 +316,7 @@ settings = {"static_path": FOLDER_ROOT_DIR,
 }
 
 application = tornado.web.Application([
+    (r"/", MainHandler),
     (r"/([a-z]{4})", TokenHandler),
     (r"/([a-f0-9]{32})", UrlHandler),
     (r"/token", ApiHandler),
