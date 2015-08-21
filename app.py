@@ -268,7 +268,7 @@ class ApiHandler(tornado.web.RequestHandler):
       return
     reused = yield redrdb.tokens.find_one({'token': token})
     if not reused:
-      usecount = 1
+      usecount = 0
       tkey = uuid.uuid4().hex
       yield redrdb.tokens.insert({'token': token, 'usecount': usecount, 'tkey': tkey})
       reused = yield redrdb.tokens.find_one({'token': token})
@@ -289,7 +289,7 @@ class ApiHandler(tornado.web.RequestHandler):
 
 class UrlHandler(tornado.web.RequestHandler):
   def get(self,folder):
-    dir = Path(FOLDER_ROOT_DIR+folder+'/index.html')
+    dir = Path(os.path.join(FOLDER_ROOT_DIR, folder)+'/index.html')
     if dir.exists():
       self.render(str(dir.resolve()))
     else:

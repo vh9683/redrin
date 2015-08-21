@@ -22,7 +22,7 @@ import subprocess
 
 FILESIZE=1024*1024*1024 #1MB
 
-mhBaseCmd = 'mhonarc -nothread -nomultipg -nomain -noprintxcomments -quiet -single -nomailto '
+mhBaseCmd = '/usr/bin/mhonarc -nothread -nomultipg -nomain -noprintxcomments -quiet -single -nomailto '
 
 instance = "0"
 
@@ -123,6 +123,8 @@ def emailHandler(ev, pickledEv):
   if not tdata:
     logger.info("No Data for token {}".format(token))
     return False
+  
+  tdata = pickle.loads(tdata)
 
   folder = tdata['folder']
   if folder is None:
@@ -133,11 +135,12 @@ def emailHandler(ev, pickledEv):
     logger.info("Folder {} is not valid uuid \n".format(folder))
     return False
   
-  mhcmd = str(mhBaseCmd)
+  mhcmd = 'cd ' + os.path.join(FOLDER_ROOT_DIR + folder) + '; '
+  mhcmd += str(mhBaseCmd)
 
-  mhcmd += ' -attachmenturl ' + '/'+folder 
+  mhcmd += ' -attachmenturl ' + '"' + '/'+folder +'"'
 
-  mhcmd += ' -iconurlprefix ' + '/'+folder 
+  mhcmd += ' -iconurlprefix ' + '"' + '/'+folder + '"'
  
   dstdir = os.path.join (FOLDER_ROOT_DIR, folder)
  
@@ -146,8 +149,8 @@ def emailHandler(ev, pickledEv):
     os.mkdir(dstdir, 0o700)
   except FileExitsUser:
     logger.info("Destination folder : {} exists".format(dstdir))
-    return False
- 
+    raise 
+
   #TODO make use of tempfile 
   maildumpfile = os.path.join(dstdir, 'email.dump') 
 
@@ -155,11 +158,18 @@ def emailHandler(ev, pickledEv):
   edumpfp.write(ev['msg']['raw_msg'])
   edumpfp.close()
 
-  mhcmd += ' ' + maildumpfile + ' ' + os.path.join(dstdir, 'op.html')
-  if not  subprocess.call(mhcmd):
-    logger.info("MHonArc failed , command [{}]\n".format(mhcmd))
-    return False
+  mhcmd += ' ' + maildumpfile + ' > ' + os.path.join(dstdir, 'op.html')
+  #result = subprocess.call(mhcmd, shell=True)
+  logger.info('command is {}'.format(mhcmd))
+  try:
+    #os.system(mhcmd)
+    #subprocess.call(mhcmd)
+    subprocess.call(mhcmd, shell=True)
+  except:
+    logger.info("SYSTEM CMD {}".format(mhcmd))
+    raise
     
+  logger.info("SYSTEM CMD {}".format(mhcmd))
   processOpHtml(dstdir) 
 
   return True
@@ -184,8 +194,9 @@ if __name__ == '__main__':
     backupmail = False
     if (rclient.llen(redrmailhandlerBackup)):
         logger.info("len of (" + redrmailhandlerBackup + " ) is {} ".format(rclient.llen(redrmailhandlerBackup)))
-        ev = rclient.brpop (redrmailhandlerBackup)
+        evt = rclient.brpop (redrmailhandlerBackup)
         backupmail = True
+        ev = pickle.loads(evt[1])
         pickledEv = pickle.dumps(ev)
         logger.info("Getting events from {}".format(redrmailhandlerBackup))
     else:
@@ -194,6 +205,7 @@ if __name__ == '__main__':
         logger.info("Getting events from {}".format('redrmailhandler'))
 
     emailHandler(ev, pickledEv)
+
     if(not backupmail):
       logger.info ('len of {} is : {}'.format(redrmailhandlerBackup, rclient.llen(redrmailhandlerBackup)))
       rclient.lrem(redrmailhandlerBackup, 0, pickledEv)
