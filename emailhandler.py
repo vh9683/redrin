@@ -131,6 +131,7 @@ def convertToHTML5 (dstdir):
 
   intermediatefp.close()
 
+  message = message.replace('<meta name="generator" content="pandoc">', '')
   indexfile = os.path.join(dstdir, 'index.html')
   idfp = open(indexfile, 'w')
   idfp.write(message)
