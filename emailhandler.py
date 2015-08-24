@@ -22,9 +22,10 @@ import subprocess
 
 FILESIZE=1024*1024*1024 #1MB
 
-pandocCmd = '/usr/bin/pandoc '
+#pandocCmd = '/usr/bin/pandoc '
+pandocCmd = '/root/.cabal/bin/pandoc ' + ' '
 
-html2wikiCmd = pandocCmd + '-r html {0}/op.html -s -S -t mediawiki -o {0}/media.wiki'
+html2wikiCmd = pandocCmd + '-r html {0}/html4.html -s -S -t mediawiki -o {0}/media.wiki'
 wiki2html5Cmd = pandocCmd + '-f mediawiki -t html5 -s -S {0}/media.wiki -H ./template/header -B ./template/jumbo -A ./template/aferbody '
 wiki2html5Cmd += ' --base-header-level=2  -T "redr.in - email for masses" -o {0}/intermediate.html'
 
@@ -103,26 +104,39 @@ def convertToHTML5 (dstdir):
   html2wikiCmd_copy = html2wikiCmd_copy.format(dstdir)
   logger.info("Converting to html2wiki [{}]".format(html2wikiCmd_copy))
 
-  if not subprocess.call(html2wikiCmd_copy, shell=True):
+  try:
+    subprocess.call(html2wikiCmd_copy, shell=True)
+  except:
     logger.info("Converting to wiki failed\n")
-    return False
+    raise
 
   wiki2html5Cmd_copy = str(wiki2html5Cmd)
   wiki2html5Cmd_copy = wiki2html5Cmd_copy.format(dstdir)
 
   logger.info("Converting to wiki2html5  [{}]".format(wiki2html5Cmd_copy))
 
-  if not subprocess.call(wiki2html5Cmd_copy, shell=True):
+  try:
+    subprocess.call(wiki2html5Cmd_copy, shell=True)
+  except:
     logger.info("Converting to html5 failed\n")
-    return False
+    raise
 
   intermediatefile = os.path.join(dstdir, 'intermediate.html')
 
   message = ""
-  intermediatefp = open(opfile, 'r')
+  intermediatefp = open(intermediatefile, 'r')
   for line in intermediatefp:
     if '<head>' in line:
-      message += beforehead + line
+      message += '''
+        <style>
+            img {
+                max-width           : 100%;
+                height              : auto;
+            }
+        </style>
+       '''
+
+      message += line
     elif '</body>' in line:
       message += ' </div> </div> '
       message += '\n' + line
