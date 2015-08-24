@@ -22,6 +22,12 @@ import subprocess
 
 FILESIZE=1024*1024*1024 #1MB
 
+pandocCmd = '/usr/bin/pandoc '
+
+html2wikiCmd = pandocCmd + '-r html {0}/op.html -s -S -t mediawiki -o {0}/media.wiki'
+wiki2html5Cmd = pandocCmd + '-f mediawiki -t html5 -s -S {0}/media.wiki -H ./template/header -B ./template/jumbo -A ./template/aferbody '
+wiki2html5Cmd += ' --base-header-level=2  -T "redr.in - email for masses" -o {0}/intermediate.html'
+
 mhBaseCmd = '/usr/bin/mhonarc -nothread -nomultipg -nomain -noprintxcomments -quiet -single -nomailto '
 
 instance = "0"
@@ -65,9 +71,9 @@ def isregistereduser(a):
   """ check whether the user address is a registered one or generated one """
   return not valid_uuid4(a)
 
-def processOpHtml (dstdir):
+def processMHOutPutHtml (dstdir):
   opfile = os.path.join(dstdir, 'op.html')
-  indexfile = os.path.join(dstdir, 'index.html')
+  html4file = os.path.join(dstdir, 'html4.html')
   
   ignored = ['<em>Authentication-results</em>' , '<em>Delivered-to</em>', '<em>Dkim-signature</em>', '<em>In-reply-to</em>', '<em>References</em>', '<!--', '<!DOCTYPE HTML PUBLIC', "http://www.w3.org/TR/html4/loose.dtd" ]
   
@@ -81,13 +87,57 @@ def processOpHtml (dstdir):
         break
 
     if found == False:
-      message += line.replace ('.//', '/')
+      line1 = line.replace('<img src="">', '')
+      message += line1.replace ('.//', '/')
 
   opfp.close()
 
+  idfp = open(html4file, 'w')
+  idfp.write(message)
+  idfp.close()
+
+  return True
+
+def convertToHTML5 (dstdir):
+  html2wikiCmd_copy = str(html2wikiCmd)
+  html2wikiCmd_copy = html2wikiCmd_copy.format(dstdir)
+  logger.info("Converting to html2wiki [{}]".format(html2wikiCmd_copy))
+
+  if not subprocess.call(html2wikiCmd_copy, shell=True):
+    logger.info("Converting to wiki failed\n")
+    return False
+
+  wiki2html5Cmd_copy = str(wiki2html5Cmd)
+  wiki2html5Cmd_copy = wiki2html5Cmd_copy.format(dstdir)
+
+  logger.info("Converting to wiki2html5  [{}]".format(wiki2html5Cmd_copy))
+
+  if not subprocess.call(wiki2html5Cmd_copy, shell=True):
+    logger.info("Converting to html5 failed\n")
+    return False
+
+  intermediatefile = os.path.join(dstdir, 'intermediate.html')
+
+  message = ""
+  intermediatefp = open(opfile, 'r')
+  for line in intermediatefp:
+    if '<head>' in line:
+      message += beforehead + line
+    elif '</body>' in line:
+      message += ' </div> </div> '
+      message += '\n' + line
+    else:
+      message += ' ' + line
+
+  intermediatefp.close()
+
+  indexfile = os.path.join(dstdir, 'index.html')
   idfp = open(indexfile, 'w')
   idfp.write(message)
   idfp.close()
+
+  #TODO: Uncomment later
+  #os.system( 'rm -f {0}/media.wiki {0}/op.html {0}/intermediate.html'.format(dstdir))
 
   return True
 
@@ -170,7 +220,10 @@ def emailHandler(ev, pickledEv):
     raise
     
   logger.info("SYSTEM CMD {}".format(mhcmd))
-  processOpHtml(dstdir) 
+  processMHOutPutHtml(dstdir) 
+
+  convertToHTML5 (dstdir)
+
 
   return True
 
