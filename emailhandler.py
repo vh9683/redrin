@@ -93,7 +93,7 @@ def processMHOutPutHtml (dstdir):
   opfile = os.path.join(dstdir, 'op.html')
   html4file = os.path.join(dstdir, 'html4.html')
   
-  ignored = ['<em>Authentication-results</em>' , '<em>Delivered-to</em>', '<em>Dkim-signature</em>', '<em>In-reply-to</em>', '<em>References</em>', '<!--', '<!DOCTYPE HTML PUBLIC', "http://www.w3.org/TR/html4/loose.dtd" ]
+  ignored = ['<em>Authentication-results</em>' , '<em>Delivered-to</em>', '<em>Dkim-signature</em>', '<em>In-reply-to</em>', '<em>References</em>', '<!--', '<!DOCTYPE HTML PUBLIC', "http://www.w3.org/TR/html4/loose.dtd" , '<em>To</em>:']
   
   message = "<!DOCTYPE HTML>"
   opfp = open(opfile, 'r')
