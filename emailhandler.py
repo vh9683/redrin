@@ -53,17 +53,17 @@ beforehead = '''
 '''
 
 html5header = ''
-with open('./tempfile/header') as f:
+with open('./template/header') as f:
     header = f.read()
     f.close()
 
 jumbo = ''
-with open('./tempfile/jumbo') as f:
+with open('./template/jumbo') as f:
     jumbo = f.read()
     f.close()
 
 adds = ''
-with open('./tempfile/aferbody') as f:
+with open('./template/aferbody') as f:
     adds = f.read()
     f.close()
  
