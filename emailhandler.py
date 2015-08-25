@@ -46,24 +46,18 @@ taddrcomp = re.compile('([\w.-]+)@'+OUR_DOMAIN)
 
 rclient = StrictRedis()
 
-beforehead = ''' 
-<style>
-    img { max-width: 100%; height: auto;}
-</style>
-'''
-
 html5header = ''
-with open('./tempfile/header') as f:
-    header = f.read()
+with open('./template/header') as f:
+    html5header = f.read()
     f.close()
 
 jumbo = ''
-with open('./tempfile/jumbo') as f:
+with open('./template/jumbo') as f:
     jumbo = f.read()
     f.close()
 
 adds = ''
-with open('./tempfile/aferbody') as f:
+with open('./template/aferbody') as f:
     adds = f.read()
     f.close()
  
@@ -158,11 +152,12 @@ def convertToHTML5 (dstdir):
   message = ""
   html4fp = open(html4file, 'r')
   for line in html4fp:
-      if '<head>' in line:
-          message += beforehead + line + html5header
+      if '</head>' in line:
+          message += html5header + '\n' + line
+      elif '<body>' in line:
+          message += '\n' + line + '\n' + jumbo
       elif '</body>' in line:
-          message += afterbody
-          message += ' </div> </div> '
+          message += adds
           message += '\n' + line
       else:
           message += line
@@ -235,7 +230,7 @@ def emailHandler(ev, pickledEv):
   logger.info("Destination folder : {} , url {}".format(dstdir, folder))
   try :
     os.mkdir(dstdir, 0o700)
-  except FileExitsError:
+  except FileExistsError:
     logger.info("Destination folder : {} exists".format(dstdir))
     return False
 
