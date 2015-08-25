@@ -31,6 +31,8 @@ wiki2html5Cmd += ' --base-header-level=2  -T "redr.in - email for masses" -o {0}
 
 mhBaseCmd = '/usr/bin/mhonarc -nothread -nomultipg -nomain -noprintxcomments -quiet -single -nomailto '
 
+html2html5 = pandocCmd + ' -r html {0}/html4.html -t html5 -s -S  -H ./template/header -B ./template/jumbo -A ./template/aferbody  --base-header-level=3  -T "redr.in - email for masses" -o {0}/intermediate.html'
+
 instance = "0"
 
 logger = logging.getLogger('mailHandler')
@@ -100,23 +102,35 @@ def processMHOutPutHtml (dstdir):
   return True
 
 def convertToHTML5 (dstdir):
-  html2wikiCmd_copy = str(html2wikiCmd)
-  html2wikiCmd_copy = html2wikiCmd_copy.format(dstdir)
-  logger.info("Converting to html2wiki [{}]".format(html2wikiCmd_copy))
 
+# html2wikiCmd_copy = str(html2wikiCmd)
+# html2wikiCmd_copy = html2wikiCmd_copy.format(dstdir)
+# logger.info("Converting to html2wiki [{}]".format(html2wikiCmd_copy))
+
+# try:
+#   subprocess.call(html2wikiCmd_copy, shell=True)
+# except:
+#   logger.info("Converting to wiki failed\n")
+#   raise
+
+# wiki2html5Cmd_copy = str(wiki2html5Cmd)
+# wiki2html5Cmd_copy = wiki2html5Cmd_copy.format(dstdir)
+
+# logger.info("Converting to wiki2html5  [{}]".format(wiki2html5Cmd_copy))
+
+# try:
+#   subprocess.call(wiki2html5Cmd_copy, shell=True)
+# except:
+#   logger.info("Converting to html5 failed\n")
+#   raise
+
+
+  html5cmd = str(html2html5)
+
+  html5cmd = html5cmd.format(dstdir)
+  print (html5cmd)
   try:
-    subprocess.call(html2wikiCmd_copy, shell=True)
-  except:
-    logger.info("Converting to wiki failed\n")
-    raise
-
-  wiki2html5Cmd_copy = str(wiki2html5Cmd)
-  wiki2html5Cmd_copy = wiki2html5Cmd_copy.format(dstdir)
-
-  logger.info("Converting to wiki2html5  [{}]".format(wiki2html5Cmd_copy))
-
-  try:
-    subprocess.call(wiki2html5Cmd_copy, shell=True)
+    subprocess.call(html5cmd, shell=True)
   except:
     logger.info("Converting to html5 failed\n")
     raise
@@ -126,21 +140,6 @@ def convertToHTML5 (dstdir):
   message = ""
   intermediatefp = open(intermediatefile, 'r')
   for line in intermediatefp:
-    if '<head>' in line:
-      message += '''
-        <style>
-            img {
-                max-width           : 100%;
-                height              : auto;
-            }
-        </style>
-       '''
-
-      message += line
-    elif '</body>' in line:
-      message += ' </div> </div> '
-      message += '\n' + line
-    else:
       message += ' ' + line
 
   intermediatefp.close()
@@ -212,9 +211,9 @@ def emailHandler(ev, pickledEv):
   logger.info("Destination folder : {} , url {}".format(dstdir, folder))
   try :
     os.mkdir(dstdir, 0o700)
-  except FileExitsUser:
+  except FileExitsError:
     logger.info("Destination folder : {} exists".format(dstdir))
-    raise 
+    return False
 
   #TODO make use of tempfile 
   maildumpfile = os.path.join(dstdir, 'email.dump') 

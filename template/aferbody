@@ -6,27 +6,28 @@
     <div class="modal-content">
       <div class="modal-header">
         <div class="row">
-        <div class="col-sm-6 col-md-6 col-xs-12">
+        <div class="col-sm-12 col-md-12 col-xs-12">
         <button type="button" class="close" data-dismiss="modal">&times;</button>
-        <h4 class="modal-title">Modal Header</h4>
+        <h4 class="modal-title">Redr.in <small>Email Recorder</small></h4>
         </div>
         </div>
       </div>
       <div class="modal-body">
         <div class="row">
-        <div class="col-sm-6 col-md-6 col-xs-12">
-        <p>Some text in the modal.</p>
+        <div class="col-sm-12 col-md-12 col-xs-12">
+        <p>Hi, The content will be available for 7 days.</p>
         </div>
         </div>
       </div>
       <div class="modal-footer">
         <div class="row">
-        <div class="col-sm-6 col-md-6 col-xs-12">
+        <div class="col-sm-12 col-md-12 col-xs-12">
         <button type="button" class="btn btn-default" data-dismiss="modal">Close</button>
         </div>
         </div>
       </div>
     </div>
-
   </div>
+</div>
+</div>
 </div>
