@@ -29,7 +29,9 @@ html2wikiCmd = pandocCmd + '-r html {0}/html4.html -s -S -t mediawiki -o {0}/med
 wiki2html5Cmd = pandocCmd + '-f mediawiki -t html5 -s -S {0}/media.wiki -H ./template/header -B ./template/jumbo -A ./template/aferbody '
 wiki2html5Cmd += ' --base-header-level=2  -T "redr.in - email for masses" -o {0}/intermediate.html'
 
-mhBaseCmd = '/usr/bin/mhonarc -nothread -nomultipg -nomain -noprintxcomments -quiet -single -nomailto '
+mhBaseCmd = '/usr/bin/mhonarc -nothread -nomultipg -nomain -noprintxcomments -quiet -single -nomailto  -rcfile ./config/filters.mrc'
+
+html2html5 = pandocCmd + ' -r html {0}/html4.html -t html5 -s -S  -H ./template/header -B ./template/jumbo -A ./template/aferbody  --base-header-level=3  -T "redr.in - email for masses" -o {0}/intermediate.html'
 
 html2html5 = pandocCmd + ' -r html {0}/html4.html -t html5 -s -S  -H ./template/header -B ./template/jumbo -A ./template/aferbody  --base-header-level=3  -T "redr.in - email for masses" -o {0}/intermediate.html'
 
@@ -123,10 +125,6 @@ def convertToHTML5 (dstdir):
 # except:
 #   logger.info("Converting to html5 failed\n")
 #   raise
-
-
-  html5cmd = str(html2html5)
-
   html5cmd = html5cmd.format(dstdir)
   print (html5cmd)
   try:
