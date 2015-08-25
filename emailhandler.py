@@ -33,8 +33,6 @@ mhBaseCmd = '/usr/bin/mhonarc -nothread -nomultipg -nomain -noprintxcomments -qu
 
 html2html5 = pandocCmd + ' -r html {0}/html4.html -t html5 -s -S  -H ./template/header -B ./template/jumbo -A ./template/aferbody  --base-header-level=3  -T "redr.in - email for masses" -o {0}/intermediate.html'
 
-html2html5 = pandocCmd + ' -r html {0}/html4.html -t html5 -s -S  -H ./template/header -B ./template/jumbo -A ./template/aferbody  --base-header-level=3  -T "redr.in - email for masses" -o {0}/intermediate.html'
-
 instance = "0"
 
 logger = logging.getLogger('mailHandler')
@@ -48,6 +46,27 @@ taddrcomp = re.compile('([\w.-]+)@'+OUR_DOMAIN)
 
 rclient = StrictRedis()
 
+beforehead = ''' 
+<style>
+    img { max-width: 100%; height: auto;}
+</style>
+'''
+
+html5header = ''
+with open('./tempfile/header') as f:
+    header = f.read()
+    f.close()
+
+jumbo = ''
+with open('./tempfile/jumbo') as f:
+    jumbo = f.read()
+    f.close()
+
+adds = ''
+with open('./tempfile/aferbody') as f:
+    adds = f.read()
+    f.close()
+ 
 def getdomain(a):
   return a.split('@')[-1]
   
@@ -125,24 +144,31 @@ def convertToHTML5 (dstdir):
 # except:
 #   logger.info("Converting to html5 failed\n")
 #   raise
-  html5cmd = html5cmd.format(dstdir)
-  print (html5cmd)
-  try:
-    subprocess.call(html5cmd, shell=True)
-  except:
-    logger.info("Converting to html5 failed\n")
-    raise
 
-  intermediatefile = os.path.join(dstdir, 'intermediate.html')
+# html5cmd = html5cmd.format(dstdir)
+# print (html5cmd)
+# try:
+#   subprocess.call(html5cmd, shell=True)
+# except:
+#   logger.info("Converting to html5 failed\n")
+#   raise
+
+  html4file = os.path.join(dstdir, 'html4.html')
 
   message = ""
-  intermediatefp = open(intermediatefile, 'r')
-  for line in intermediatefp:
-      message += ' ' + line
+  html4fp = open(html4file, 'r')
+  for line in html4fp:
+      if '<head>' in line:
+          message += beforehead + line + html5header
+      elif '</body>' in line:
+          message += afterbody
+          message += ' </div> </div> '
+          message += '\n' + line
+      else:
+          message += line
+  html4fp.close()
 
-  intermediatefp.close()
-
-  message = message.replace('<meta name="generator" content="pandoc">', '')
+  #message = message.replace('<meta name="generator" content="pandoc">', '')
   indexfile = os.path.join(dstdir, 'index.html')
   idfp = open(indexfile, 'w')
   idfp.write(message)
