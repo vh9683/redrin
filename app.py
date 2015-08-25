@@ -81,8 +81,8 @@ class SignupHandler(tornado.web.RequestHandler):
     from_email = ev['msg']['from_email']
     domain = self.getdomain(from_email)
     redrdb = self.settings['redrdb']
-    baddomains = redrdb.baddomains.find({})
-    if not baddomains and domain in baddomains:
+    baddomains = redrdb.baddomains.find({'domain': domain})
+    if baddomains:
       msg = {'template_name': 'redrfailure', 'email': from_email, 'global_merge_vars': [{'name': 'reason', 'content': "This Domain is not Supported."}]}
       count = rclient.publish('mailer',pickle.dumps(msg))
       gen_log.info('message ' + str(msg))
