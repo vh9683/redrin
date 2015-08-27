@@ -44,18 +44,26 @@ taddrcomp = re.compile('([\w.-]+)@'+OUR_DOMAIN)
 rclient = StrictRedis()
 
 def returnHeader(title):
+    imghead = '''
+    <style>
+    img { max-width: 100%; height: auto; }
+    </style>
+    '''
     response = """
 <!DOCTYPE html>
 <html lang="en">
+%s
 <head>
         <title>%s</title>
-        <link rel="stylesheet" type="text/css" href="/css/bootstrap.css" media="all" />
+        <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.5/css/bootstrap.min.css" media="all" />
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <script src="https://ajax.googleapis.com/ajax/libs/jquery/1.11.3/jquery.min.js"></script>
+        <script src="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.5/js/bootstrap.min.js"></script>
 </head>
 <body>
     <div class="row">
         <div class="col-md-12">
-    """ % (title)
+    """ % (imghead, title)
     return response
 
 def returnFooter():
@@ -211,6 +219,7 @@ def emailHandler(ev, debug=False):
   content_of_mail['text'] = ""
   content_of_mail['html'] = ""
   content_of_mail['attachments'] = []
+  content_of_mail['inline_attachments'] = []
 
   for part in mail.walk():
       part_content_type = part.get_content_type()
@@ -228,21 +237,19 @@ def emailHandler(ev, debug=False):
           continue
       elif part_content_type == 'text/html':
           part_decoded_contents = part.get_payload(decode=True)
-          try:
-              content_of_mail['html'] += str(part_decoded_contents)
-          except Exception:
-              try:
-                  content_of_mail['html'] += str(part_decoded_contents)
-              except ValueError:
-                  content_of_mail['html'] += "Error decoding mail contents."
-                  print("Error decoding mail contents")
-          continue
+          content_of_mail['html'] += (part_decoded_contents).decode()
       else:
+        inline_attachment = False
         if part.get_content_maintype() == 'multipart':
             continue
-        if part.get('Content-Disposition') == None:
+        content_disp = part.get('Content-Disposition') 
+        if content_disp == None:
             continue
-        print ("CD {}".foramt(part.get('Content-Disposition')))
+
+
+        if 'inline' in content_disp:
+            inline_attachment = True
+
         decoded_filename = part.get_filename()
         filename_header = None
         try:
@@ -255,7 +262,6 @@ def emailHandler(ev, debug=False):
             att_filename = re.sub(r'[^.a-zA-Z0-9 :;,\.\?]', "_", filename_header.replace(":", "").replace("/", "").replace("\\", ""))
         else:
             att_filename = re.sub(r'[^.a-zA-Z0-9 :;,\.\?]', "_", decoded_filename.replace(":", "").replace("/", "").replace("\\", ""))
-        print("Att file name {}".format(att_filename))
 
 
        #if last_att_filename == att_filename:
@@ -268,7 +274,6 @@ def emailHandler(ev, debug=False):
         path = os.path.join(FOLDER_ROOT_DIR, folder)
         att_path = os.path.join(path, att_filename)
 
-        print ("atth path {}".format(att_path))
         with open(att_path, 'wb') as att_file:
             try:
                 att_file.write(part.get_payload(decode=True))
@@ -278,10 +283,18 @@ def emailHandler(ev, debug=False):
                 return False
             att_file.close()
         
-        if debug:
-          content_of_mail['attachments'].append(att_path)
+        if inline_attachment == True:
+          cid = part.get('Content-Id')
+          cid = cid.strip('<>')
+          if debug:
+            content_of_mail['inline_attachments'].append( (cid, att_path) )
+          else:
+            content_of_mail['inline_attachments'].append( (cid, att_filename) )
         else:
-          content_of_mail['attachments'].append(att_filename)
+          if debug:
+            content_of_mail['attachments'].append(att_path)
+          else:
+            content_of_mail['attachments'].append(att_filename)
 
   mail_html_page = os.path.join(dstdir, "index.html")
   with open(mail_html_page, 'w') as mail_page:
@@ -292,10 +305,10 @@ def emailHandler(ev, debug=False):
       mail_page.write("\t\t<td>" + mail_from + "</td>\n")
       mail_page.write("\t</tr>\n")
 
-      mail_page.write("\t<tr>\n")
-      mail_page.write("\t\t<td>To: </td>\n")
-      mail_page.write("\t\t<td>" + mail_to + "</td>\n")
-      mail_page.write("\t</tr>\n")
+     #mail_page.write("\t<tr>\n")
+     #mail_page.write("\t\t<td>To: </td>\n")
+     #mail_page.write("\t\t<td>" + mail_to + "</td>\n")
+     #mail_page.write("\t</tr>\n")
 
       mail_page.write("\t<tr>\n")
       mail_page.write("\t\t<td>Subject: </td>\n")
@@ -310,12 +323,19 @@ def emailHandler(ev, debug=False):
       mail_page.write("</table>\n")
 
       if content_of_mail['html']:
-          strip_header = re.sub(r"(?i)<html>.*?<head>.*?</head>.*?<body>", "", content_of_mail['html'], flags=re.DOTALL)
+          sh = content_of_mail['html']
+          strip_header = re.sub(r"(?i)<html>.*?<head>.*?</head>.*?<body>", "", sh, flags=re.DOTALL)
           strip_header = re.sub(r"(?i)</body>.*?</html>", "", strip_header, flags=re.DOTALL)
           strip_header = re.sub(r"(?i)<!DOCTYPE.*?>", "", strip_header, flags=re.DOTALL)
           strip_header = re.sub(r"(?i)POSITION: absolute;", "", strip_header, flags=re.DOTALL)
           strip_header = re.sub(r"(?i)TOP: .*?;", "", strip_header, flags=re.DOTALL)
-          mail_page.write(str(strip_header))
+
+          if len(content_of_mail['inline_attachments']) > 0:
+            for att_tuple in content_of_mail['inline_attachments']:
+                strip_header = re.sub('(<div.*<img.*src="([^"]+).*?</div>)', "",  strip_header, re.DOTALL)
+                strip_header += '<br><div dir="ltr"><img src="{}"<br></div>'.format(att_tuple[1])
+
+          mail_page.write(strip_header)
       elif content_of_mail['text']:
           mail_page.write("<pre>")
           strip_header = re.sub(r"(?i)<html>.*?<head>.*?</head>.*?<body>", "", content_of_mail['text'], flags=re.DOTALL)
