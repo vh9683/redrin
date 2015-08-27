@@ -12,6 +12,7 @@ import copy
 import uuid
 import time
 import datetime
+import email
 import email.utils 
 from email.utils import parseaddr
 from redis import StrictRedis
@@ -21,17 +22,6 @@ import shutil
 import subprocess
 
 FILESIZE=1024*1024*1024 #1MB
-
-#pandocCmd = '/usr/bin/pandoc '
-pandocCmd = '/root/.cabal/bin/pandoc ' + ' '
-
-html2wikiCmd = pandocCmd + '-r html {0}/html4.html -s -S -t mediawiki -o {0}/media.wiki'
-wiki2html5Cmd = pandocCmd + '-f mediawiki -t html5 -s -S {0}/media.wiki -H ./template/header -B ./template/jumbo -A ./template/aferbody '
-wiki2html5Cmd += ' --base-header-level=2  -T "redr.in - email for masses" -o {0}/intermediate.html'
-
-mhBaseCmd = '/usr/bin/mhonarc -nothread -nomultipg -nomain -noprintxcomments -quiet -single -nomailto  -rcfile ./config/filters.mrc'
-
-html2html5 = pandocCmd + ' -r html {0}/html4.html -t html5 -s -S  -H ./template/header -B ./template/jumbo -A ./template/aferbody  --base-header-level=3  -T "redr.in - email for masses" -o {0}/intermediate.html'
 
 instance = "0"
 
@@ -46,21 +36,33 @@ taddrcomp = re.compile('([\w.-]+)@'+OUR_DOMAIN)
 
 rclient = StrictRedis()
 
-html5header = ''
-with open('./template/header') as f:
-    html5header = f.read()
-    f.close()
+def returnHeader(title):
+    response = """
+<!DOCTYPE html>
+<html lang="en">
+<head>
+        <title>%s</title>
+        <link rel="stylesheet" type="text/css" href="/css/bootstrap.css" media="all" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+</head>
+<body>
+    <div class="row">
+        <div class="col-md-12">
+    """ % (title)
+    return response
 
-jumbo = ''
-with open('./template/jumbo') as f:
-    jumbo = f.read()
-    f.close()
+def returnFooter():
+    response = """
+                    </div>
+                <div class="col-md-8 col-md-offset-1 footer">
+                <hr />
+                <a href="http://redr.in/>Email Recodrer</a>
+                </div>
+            </body>
+        </html>
+    """
+    return response
 
-adds = ''
-with open('./template/aferbody') as f:
-    adds = f.read()
-    f.close()
- 
 def getdomain(a):
   return a.split('@')[-1]
   
@@ -89,100 +91,81 @@ def isregistereduser(a):
   """ check whether the user address is a registered one or generated one """
   return not valid_uuid4(a)
 
-def processMHOutPutHtml (dstdir):
-  opfile = os.path.join(dstdir, 'op.html')
-  html4file = os.path.join(dstdir, 'html4.html')
-  
-  ignored = ['<em>Authentication-results</em>' , '<em>Delivered-to</em>', '<em>Dkim-signature</em>', '<em>In-reply-to</em>', '<em>References</em>', '<!--', '<!DOCTYPE HTML PUBLIC', "http://www.w3.org/TR/html4/loose.dtd" , '<em>To</em>:']
-  
-  message = "<!DOCTYPE HTML>"
-  opfp = open(opfile, 'r')
-  for line in opfp:
-    found = False
-    for i in ignored:
-      if i in line:
-        found = True
-        break
+def save_mail_attachments_to_folders(mail, folder):
 
-    if found == False:
-      line1 = line.replace('<img src="">', '')
-      message += line1.replace ('.//', '/')
+    returnTrue = False
 
-  opfp.close()
+    try:
+        att_date = str(time.strftime("%Y/%m/", email.utils.parsedate(mail['Date'])))
+    except TypeError:
+        att_date = str("2000/1/")
 
-  idfp = open(html4file, 'w')
-  idfp.write(message)
-  idfp.close()
+    if not os.path.exists(os.path.join(folder, att_date, str(mail_id), "attachments/")):
+        os.makedirs(os.path.join(folder, att_date, str(mail_id), "attachments/"))
+    else:
+        remove(os.path.join(folder, att_date, str(mail_id), "attachments/"))
+        os.makedirs(os.path.join(folder, att_date, str(mail_id), "attachments/"))
+ 
+    with open(os.path.join(folder, att_date, str(mail_id), "attachments/index.html"), "w") as att_index_file:
+        att_index_file.write(returnHeader("Attachments for mail: " + str(mail_id) + ".", "../../../../inc"))
+        att_index_file.write(returnMenu("../../../../../", activeItem=folder))
+        att_index_file.write("<h1>Attachments for mail: " + str(mail_id) + "</h1>\n")
+        att_index_file.write("<ul>\n")
+        att_index_file.close()
 
-  return True
+    for part in mail.walk():
+        if part.get_content_maintype() == 'multipart':
+            continue
+        if part.get('Content-Disposition') == None:
+            continue
+        decoded_filename = part.get_filename()
+        filename_header = None
+        try:
+            filename_header = decode_header(part.get_filename())
+        except (UnicodeEncodeError, UnicodeDecodeError):
+            filename_header = None
 
-def convertToHTML5 (dstdir):
+        if filename_header:
+            filename_header = filename_header[0][0]
+            att_filename = re.sub(r'[^.a-zA-Z0-9 :;,\.\?]', "_", filename_header.replace(":", "").replace("/", "").replace("\\", ""))
+        else:
+            att_filename = re.sub(r'[^.a-zA-Z0-9 :;,\.\?]', "_", decoded_filename.replace(":", "").replace("/", "").replace("\\", ""))
 
-# html2wikiCmd_copy = str(html2wikiCmd)
-# html2wikiCmd_copy = html2wikiCmd_copy.format(dstdir)
-# logger.info("Converting to html2wiki [{}]".format(html2wikiCmd_copy))
+        if last_att_filename == att_filename:
+            att_filename = str(att_count) + "." + att_filename
+        
+        last_att_filename = att_filename
+        att_count += 1
+            
 
-# try:
-#   subprocess.call(html2wikiCmd_copy, shell=True)
-# except:
-#   logger.info("Converting to wiki failed\n")
-#   raise
+        att_path = os.path.join(folder, att_date, str(mail_id), "attachments", att_filename)
+        att_dir = os.path.join(folder, att_date, str(mail_id), "attachments")
 
-# wiki2html5Cmd_copy = str(wiki2html5Cmd)
-# wiki2html5Cmd_copy = wiki2html5Cmd_copy.format(dstdir)
+        att_locs = []
+        with open(att_path, 'wb') as att_file:
+            try:
+                att_file.write(part.get_payload(decode=True))
+            except Exception as e:
+                att_file.write("Error writing attachment: " + str(e) + ".\n")
+                print("Error writing attachment: " + str(e) + ".\n")
+                return False
+            att_file.close()
 
-# logger.info("Converting to wiki2html5  [{}]".format(wiki2html5Cmd_copy))
+        with open(att_dir + "/index.html", "a") as att_dir_index:
+            att_dir_index.write("<li><a href=\"" + str(att_filename) + "\">" + str(att_filename) + "</a></li>\n")
+            att_dir_index.close()
+            returnTrue = True
+    
+    with open(os.path.join(folder, att_date, str(mail_id), "attachments/index.html"), "a") as att_index_file:
+        att_index_file.write("</ul>")
+        att_index_file.write(returnFooter())
+        att_index_file.close()
+        if returnTrue:
+            return True
+        else:
+            return False          
 
-# try:
-#   subprocess.call(wiki2html5Cmd_copy, shell=True)
-# except:
-#   logger.info("Converting to html5 failed\n")
-#   raise
-
-# html5cmd = html5cmd.format(dstdir)
-# print (html5cmd)
-# try:
-#   subprocess.call(html5cmd, shell=True)
-# except:
-#   logger.info("Converting to html5 failed\n")
-#   raise
-
-  html4file = os.path.join(dstdir, 'html4.html')
-
-  message = ""
-  html4fp = open(html4file, 'r')
-  for line in html4fp:
-      if '</head>' in line:
-          message += html5header + '\n' + line
-      elif '<body>' in line:
-          message += '\n' + line + '\n' + jumbo
-      elif '</body>' in line:
-          message += adds
-          message += '\n' + line
-      else:
-          message += line
-  html4fp.close()
-
-  #message = message.replace('<meta name="generator" content="pandoc">', '')
-  message = message.replace('<h1>', '<h3>')
-  message = message.replace('</h1>', '</h3>')
-  indexfile = os.path.join(dstdir, 'index.html')
-  idfp = open(indexfile, 'w')
-  idfp.write(message)
-  idfp.close()
-
-  #TODO: Uncomment later
-  #os.system( 'rm -f {0}/media.wiki {0}/op.html {0}/intermediate.html'.format(dstdir))
-
-  return True
-
-
-def emailHandler(ev, pickledEv):
-  ''' 
-    SPAM check is not done here ... it should have been handled in earlier stage of pipeline
-  '''
-  logger.info("TESTING \n")
-  
+def emailHandler(ev):
   toaddresses = ev['msg']['to']
   if len(toaddresses) != 1:
     return False
@@ -220,13 +203,6 @@ def emailHandler(ev, pickledEv):
     logger.info("Folder {} is not valid uuid \n".format(folder))
     return False
   
-  mhcmd = 'cd ' + os.path.join(FOLDER_ROOT_DIR + folder) + '; '
-  mhcmd += str(mhBaseCmd)
-
-  mhcmd += ' -attachmenturl ' + '"' + '/'+folder +'"'
-
-  mhcmd += ' -iconurlprefix ' + '"' + '/'+folder + '"'
- 
   dstdir = os.path.join (FOLDER_ROOT_DIR, folder)
  
   logger.info("Destination folder : {} , url {}".format(dstdir, folder))
@@ -243,23 +219,172 @@ def emailHandler(ev, pickledEv):
   edumpfp.write(ev['msg']['raw_msg'])
   edumpfp.close()
 
-  mhcmd += ' ' + maildumpfile + ' > ' + os.path.join(dstdir, 'op.html')
-  #result = subprocess.call(mhcmd, shell=True)
-  logger.info('command is {}'.format(mhcmd))
+  mail = email.message_from_string(ev['msg']['raw_msg'])
+  if not mail:
+    logger.info('Could not parse email')
+    return False
+
+  mail_subject = decode_header(mail.get('Subject'))[0][0]
+  mail_subject_encoding = decode_header(mail.get('Subject'))[0][1]
+  if not mail_subject_encoding:
+    mail_subject_encoding = "utf-8"
+
+  if not mail_subject:
+    mail_subject = "(No Subject)"
+
+  mail_from = email.utils.parseaddr(mail.get('From'))[1]
+
+  mail_from_encoding = decode_header(mail.get('From'))[0][1]
+  if not mail_from_encoding:
+    mail_from_encoding = "utf-8"
+
+  mail_to = email.utils.parseaddr(mail.get('To'))[1]
+  mail_to_encoding = decode_header(mail.get('To'))[0][1]
+  if not mail_to_encoding:
+    mail_to_encoding = "utf-8"
+
+  mail_date = decode_header(mail.get('Date'))[0][0]
+
   try:
-    #os.system(mhcmd)
-    #subprocess.call(mhcmd)
-    subprocess.call(mhcmd, shell=True)
-  except:
-    logger.info("SYSTEM CMD {}".format(mhcmd))
-    raise
-    
-  logger.info("SYSTEM CMD {}".format(mhcmd))
-  processMHOutPutHtml(dstdir) 
+      mail_subject = cgi.escape(unicode(mail_subject, mail_subject_encoding)).encode('ascii', 'xmlcharrefreplace')
+      mail_to = cgi.escape(unicode(mail_to, mail_to_encoding)).encode('ascii', 'xmlcharrefreplace')
+      mail_from = cgi.escape(unicode(mail_from, mail_from_encoding)).encode('ascii', 'xmlcharrefreplace')
+      email_date = str(time.strftime("%d-%m-%Y %H:%m", email.utils.parsedate(mail_date)))
+  except Exception:
+      mail_subject = decode_string(mail_subject)
+      mail_to = decode_string(mail_to)
+      mail_from = decode_string(mail_from)
+      email_date = "Error in Date"
 
-  convertToHTML5 (dstdir)
+  content_of_mail = {}
+  content_of_mail['text'] = ""
+  content_of_mail['html'] = ""
+  content_of_mail['attachments'] = []
 
+  for part in mail.walk():
+      part_content_type = part.get_content_type()
+      part_charset = part.get_charsets()
+      if part_content_type == 'text/plain':
+          part_decoded_contents = part.get_payload(decode=True)
+          try:
+              if part_charset[0]:
+                  content_of_mail['text'] += cgi.escape(unicode(str(part_decoded_contents), part_charset[0])).encode('ascii', 'xmlcharrefreplace')
+              else:
+                  content_of_mail['text'] += cgi.escape(str(part_decoded_contents)).encode('ascii', 'xmlcharrefreplace')
+          except Exception:
+              try:
+                  content_of_mail['text'] +=  decode_string(part_decoded_contents)
+              except DecodeError:
+                  content_of_mail['text'] += "Error decoding mail contents."
+                  print("Error decoding mail contents")
+          continue
+      elif part_content_type == 'text/html':
+          part_decoded_contents = part.get_payload(decode=True)
+          try:
+              if part_charset[0]:
+                  content_of_mail['html'] += unicode(str(part_decoded_contents), part_charset[0]).encode('ascii', 'xmlcharrefreplace')
+              else:
+                  content_of_mail['html'] += str(part_decoded_contents).encode('ascii', 'xmlcharrefreplace')
+          except Exception:
+              try:
+                  content_of_mail['html'] += decode_string(part_decoded_contents)
+              except DecodeError:
+                  content_of_mail['html'] += "Error decoding mail contents."
+                  print("Error decoding mail contents")
+          continue
+      else:
+        if part.get_content_maintype() == 'multipart':
+            continue
+        if part.get('Content-Disposition') == None:
+            continue
+        decoded_filename = part.get_filename()
+        filename_header = None
+        try:
+            filename_header = decode_header(part.get_filename())
+        except (UnicodeEncodeError, UnicodeDecodeError):
+            filename_header = None
 
+        if filename_header:
+            filename_header = filename_header[0][0]
+            att_filename = re.sub(r'[^.a-zA-Z0-9 :;,\.\?]', "_", filename_header.replace(":", "").replace("/", "").replace("\\", ""))
+        else:
+            att_filename = re.sub(r'[^.a-zA-Z0-9 :;,\.\?]', "_", decoded_filename.replace(":", "").replace("/", "").replace("\\", ""))
+
+        if last_att_filename == att_filename:
+            att_filename = str(att_count) + "." + att_filename
+        
+        last_att_filename = att_filename
+        att_count += 1
+            
+
+        att_path = os.path.join(folder, att_filename)
+
+        with open(att_path, 'wb') as att_file:
+            try:
+                att_file.write(part.get_payload(decode=True))
+            except Exception as e:
+                att_file.write("Error writing attachment: " + str(e) + ".\n")
+                print("Error writing attachment: " + str(e) + ".\n")
+                return False
+            att_file.close()
+        
+        content_of_mail['attachments'].append(att_filename)
+
+  mail_html_page = os.path.join(dstdir, "index.html")
+  with open(mail_html_page, 'w') as mail_page:
+      mail_page.write(returnHeader(mail_subject))
+      mail_page.write("<table>\n")
+      mail_page.write("\t<tr>\n")
+      mail_page.write("\t\t<td>From: </td>\n")
+      mail_page.write("\t\t<td>" + mail_from + "</td>\n")
+      mail_page.write("\t</tr>\n")
+
+      mail_page.write("\t<tr>\n")
+      mail_page.write("\t\t<td>To: </td>\n")
+      mail_page.write("\t\t<td>" + mail_to + "</td>\n")
+      mail_page.write("\t</tr>\n")
+
+      mail_page.write("\t<tr>\n")
+      mail_page.write("\t\t<td>Subject: </td>\n")
+      mail_page.write("\t\t<td>" + mail_subject + "</td>\n")
+      mail_page.write("\t</tr>\n")
+
+      mail_page.write("\t<tr>\n")
+      mail_page.write("\t\t<td>Date: </td>\n")
+      mail_page.write("\t\t<td>" + mail_date + "</td>\n")
+      mail_page.write("\t</tr>\n")
+
+      mail_page.write("</table>\n")
+
+      if content_of_mail['html']:
+          strip_header = re.sub(r"(?i)<html>.*?<head>.*?</head>.*?<body>", "", content_of_mail['html'], flags=re.DOTALL)
+          strip_header = re.sub(r"(?i)</body>.*?</html>", "", strip_header, flags=re.DOTALL)
+          strip_header = re.sub(r"(?i)<!DOCTYPE.*?>", "", strip_header, flags=re.DOTALL)
+          strip_header = re.sub(r"(?i)POSITION: absolute;", "", strip_header, flags=re.DOTALL)
+          strip_header = re.sub(r"(?i)TOP: .*?;", "", strip_header, flags=re.DOTALL)
+          mail_page.write(decodestring(strip_header))
+      elif content_of_mail['text']:
+          mail_page.write("<pre>")
+          strip_header = re.sub(r"(?i)<html>.*?<head>.*?</head>.*?<body>", "", content_of_mail['text'], flags=re.DOTALL)
+          strip_header = re.sub(r"(?i)</body>.*?</html>", "", strip_header, flags=re.DOTALL)
+          strip_header = re.sub(r"(?i)<!DOCTYPE.*?>", "", strip_header, flags=re.DOTALL)
+          strip_header = re.sub(r"(?i)POSITION: absolute;", "", strip_header, flags=re.DOTALL)
+          strip_header = re.sub(r"(?i)TOP: .*?;", "", strip_header, flags=re.DOTALL)
+          mail_page.write(decodestring(strip_header))
+          mail_page.write("</pre>\n")
+
+      if len(content_of_mail['attachments']) > 0:
+        mail_page.write("<h5>Attachments<\h5>\n")
+        mail_page.write("<table>\n")
+        for att in content_of_mail['attachments']:
+          mail_page.write("\t<tr>\n")
+          mail_page.write("\t\t<td><a href=" + '"/' + folder + '/' + att + '"' + ">" + att + "</a></td>\n")
+          mail_page.write("\t</tr>\n")
+        mail_page.write("</table>\n")
+     
+      mail_page.write(returnFooter())
+
+      mail_page.close()        
   return True
 
 if __name__ == '__main__':
@@ -292,7 +417,7 @@ if __name__ == '__main__':
         ev = pickle.loads(pickledEv)
         logger.info("Getting events from {}".format('redrmailhandler'))
 
-    emailHandler(ev, pickledEv)
+    emailHandler(ev)
 
     if(not backupmail):
       logger.info ('len of {} is : {}'.format(redrmailhandlerBackup, rclient.llen(redrmailhandlerBackup)))
