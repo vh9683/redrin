@@ -347,7 +347,7 @@ def emailHandler(ev, debug=False):
           mail_page.write("</pre>\n")
 
       if len(content_of_mail['attachments']) > 0:
-        mail_page.write("<h5>Attachments<\h5>\n")
+        mail_page.write("<br><h5>Attachments</h5>")
         mail_page.write("<table>\n")
         for att in content_of_mail['attachments']:
           mail_page.write("\t<tr>\n")
