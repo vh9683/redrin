@@ -24,6 +24,8 @@ from email.header import decode_header
 from email.utils import parsedate
 import cgi
 from quopri import decodestring
+import json
+from shutil import rmtree
 
 
 FILESIZE=1024*1024*1024 #1MB
@@ -68,6 +70,15 @@ def returnFooter():
     """
     return response
 
+def decode_string(string):
+   return string
+   #for charset in ("utf-8", 'latin-1', 'iso-8859-1', 'us-ascii', 'windows-1252','us-ascii'):
+   #    try:
+   #        return cgi.escape(string).encode('ascii', 'xmlcharrefreplace')
+   #    except Exception:
+   #        continue
+   #raise ValueError("Could not decode string")
+
 def getdomain(a):
   return a.split('@')[-1]
   
@@ -96,81 +107,8 @@ def isregistereduser(a):
   """ check whether the user address is a registered one or generated one """
   return not valid_uuid4(a)
 
-def save_mail_attachments_to_folders(mail, folder):
 
-    returnTrue = False
-
-    try:
-        att_date = str(time.strftime("%Y/%m/", email.utils.parsedate(mail['Date'])))
-    except TypeError:
-        att_date = str("2000/1/")
-
-    if not os.path.exists(os.path.join(folder, att_date, str(mail_id), "attachments/")):
-        os.makedirs(os.path.join(folder, att_date, str(mail_id), "attachments/"))
-    else:
-        remove(os.path.join(folder, att_date, str(mail_id), "attachments/"))
-        os.makedirs(os.path.join(folder, att_date, str(mail_id), "attachments/"))
- 
-    with open(os.path.join(folder, att_date, str(mail_id), "attachments/index.html"), "w") as att_index_file:
-        att_index_file.write(returnHeader("Attachments for mail: " + str(mail_id) + ".", "../../../../inc"))
-        att_index_file.write(returnMenu("../../../../../", activeItem=folder))
-        att_index_file.write("<h1>Attachments for mail: " + str(mail_id) + "</h1>\n")
-        att_index_file.write("<ul>\n")
-        att_index_file.close()
-
-    for part in mail.walk():
-        if part.get_content_maintype() == 'multipart':
-            continue
-        if part.get('Content-Disposition') == None:
-            continue
-        decoded_filename = part.get_filename()
-        filename_header = None
-        try:
-            filename_header = decode_header(part.get_filename())
-        except (UnicodeEncodeError, UnicodeDecodeError):
-            filename_header = None
-
-        if filename_header:
-            filename_header = filename_header[0][0]
-            att_filename = re.sub(r'[^.a-zA-Z0-9 :;,\.\?]', "_", filename_header.replace(":", "").replace("/", "").replace("\\", ""))
-        else:
-            att_filename = re.sub(r'[^.a-zA-Z0-9 :;,\.\?]', "_", decoded_filename.replace(":", "").replace("/", "").replace("\\", ""))
-
-        if last_att_filename == att_filename:
-            att_filename = str(att_count) + "." + att_filename
-        
-        last_att_filename = att_filename
-        att_count += 1
-            
-
-        att_path = os.path.join(folder, att_date, str(mail_id), "attachments", att_filename)
-        att_dir = os.path.join(folder, att_date, str(mail_id), "attachments")
-
-        att_locs = []
-        with open(att_path, 'wb') as att_file:
-            try:
-                att_file.write(part.get_payload(decode=True))
-            except Exception as e:
-                att_file.write("Error writing attachment: " + str(e) + ".\n")
-                print("Error writing attachment: " + str(e) + ".\n")
-                return False
-            att_file.close()
-
-        with open(att_dir + "/index.html", "a") as att_dir_index:
-            att_dir_index.write("<li><a href=\"" + str(att_filename) + "\">" + str(att_filename) + "</a></li>\n")
-            att_dir_index.close()
-            returnTrue = True
-    
-    with open(os.path.join(folder, att_date, str(mail_id), "attachments/index.html"), "a") as att_index_file:
-        att_index_file.write("</ul>")
-        att_index_file.write(returnFooter())
-        att_index_file.close()
-        if returnTrue:
-            return True
-        else:
-            return False          
-
-def emailHandler(ev):
+def emailHandler(ev, debug=False):
   toaddresses = ev['msg']['to']
   if len(toaddresses) != 1:
     return False
@@ -179,43 +117,51 @@ def emailHandler(ev):
 
   logger.info("To Address {} -> {}".format(toaddresses, to))
 
-  if not taddrcomp.fullmatch(to):
-    logger.info("To Address comparision failed \n")
-    return False
+  if not debug:
+    if not taddrcomp.fullmatch(to):
+        logger.info("To Address comparision failed \n")
+        return False
 
-  if not isourdomain(to):
-    logger.info("Not Our Domain \n")
-    return False
- 
-  token = getuserid(to)
-  if not token:
-    logger.info("getuserid failed\n")
-    return False
-  
-  tdata = rclient.get(token)
-  if not tdata:
-    logger.info("No Data for token {}".format(token))
-    return False
-  
-  tdata = pickle.loads(tdata)
+    if not isourdomain(to):
+        logger.info("Not Our Domain \n")
+        return False
+    
+    token = getuserid(to)
+    if not token:
+        logger.info("getuserid failed\n")
+        return False
+    
+    tdata = rclient.get(token)
+    if not tdata:
+        logger.info("No Data for token {}".format(token))
+        return False
+    
+    tdata = pickle.loads(tdata)
 
-  folder = tdata['folder']
-  if folder is None:
-    logger.info("No Folder {} Data for token {}".format(folder, token))
-    return False
-  
-  if not valid_uuid4(folder):
-    logger.info("Folder {} is not valid uuid \n".format(folder))
-    return False
-  
+    folder = tdata['folder']
+    if folder is None:
+        logger.info("No Folder {} Data for token {}".format(folder, token))
+        return False
+    
+    if not valid_uuid4(folder):
+        logger.info("Folder {} is not valid uuid \n".format(folder))
+        return False
+    
+  else:
+    folder = 'test'
+
   dstdir = os.path.join (FOLDER_ROOT_DIR, folder)
  
   logger.info("Destination folder : {} , url {}".format(dstdir, folder))
   try :
     os.mkdir(dstdir, 0o700)
   except FileExistsError:
-    logger.info("Destination folder : {} exists".format(dstdir))
-    return False
+    if debug:
+      rmtree(dstdir, ignore_errors=True)
+      os.mkdir(dstdir, 0o700)
+    else:
+      logger.info("Destination folder : {} exists".format(dstdir))
+      return False
 
   rawmail = ev['msg']['raw_msg']
 
@@ -250,17 +196,16 @@ def emailHandler(ev):
     mail_to_encoding = "utf-8"
 
   mail_date = decode_header(mail.get('Date'))[0][0]
-
-  try:
-      mail_subject = cgi.escape(unicode(mail_subject, mail_subject_encoding)).encode('ascii', 'xmlcharrefreplace')
-      mail_to = cgi.escape(unicode(mail_to, mail_to_encoding)).encode('ascii', 'xmlcharrefreplace')
-      mail_from = cgi.escape(unicode(mail_from, mail_from_encoding)).encode('ascii', 'xmlcharrefreplace')
-      email_date = str(time.strftime("%d-%m-%Y %H:%m", email.utils.parsedate(mail_date)))
-  except Exception:
-      mail_subject = decode_string(mail_subject)
-      mail_to = decode_string(mail_to)
-      mail_from = decode_string(mail_from)
-      email_date = "Error in Date"
+# try:
+#     mail_subject = cgi.escape(mail_subject).encode('ascii', 'xmlcharrefreplace')
+#     mail_to = cgi.escape(unicode(mail_to, mail_to_encoding)).encode('ascii', 'xmlcharrefreplace')
+#     mail_from = cgi.escape(unicode(mail_from, mail_from_encoding)).encode('ascii', 'xmlcharrefreplace')
+#     email_date = str(time.strftime("%d-%m-%Y %H:%m", email.utils.parsedate(mail_date)))
+# except Exception:
+ #mail_subject = decode_string(mail_subject)
+ #mail_to = decode_string(mail_to)
+ #mail_from = decode_string(mail_from)
+  email_date = str(time.strftime("%d-%m-%Y %H:%m", email.utils.parsedate(mail_date)))
 
   content_of_mail = {}
   content_of_mail['text'] = ""
@@ -273,28 +218,22 @@ def emailHandler(ev):
       if part_content_type == 'text/plain':
           part_decoded_contents = part.get_payload(decode=True)
           try:
-              if part_charset[0]:
-                  content_of_mail['text'] += cgi.escape(unicode(str(part_decoded_contents), part_charset[0])).encode('ascii', 'xmlcharrefreplace')
-              else:
-                  content_of_mail['text'] += cgi.escape(str(part_decoded_contents)).encode('ascii', 'xmlcharrefreplace')
+              content_of_mail['text'] +=  str(part_decoded_contents)
           except Exception:
               try:
-                  content_of_mail['text'] +=  decode_string(part_decoded_contents)
-              except DecodeError:
+                  content_of_mail['text'] +=  str(part_decoded_contents)
+              except ValueError:
                   content_of_mail['text'] += "Error decoding mail contents."
                   print("Error decoding mail contents")
           continue
       elif part_content_type == 'text/html':
           part_decoded_contents = part.get_payload(decode=True)
           try:
-              if part_charset[0]:
-                  content_of_mail['html'] += unicode(str(part_decoded_contents), part_charset[0]).encode('ascii', 'xmlcharrefreplace')
-              else:
-                  content_of_mail['html'] += str(part_decoded_contents).encode('ascii', 'xmlcharrefreplace')
+              content_of_mail['html'] += str(part_decoded_contents)
           except Exception:
               try:
-                  content_of_mail['html'] += decode_string(part_decoded_contents)
-              except DecodeError:
+                  content_of_mail['html'] += str(part_decoded_contents)
+              except ValueError:
                   content_of_mail['html'] += "Error decoding mail contents."
                   print("Error decoding mail contents")
           continue
@@ -303,6 +242,7 @@ def emailHandler(ev):
             continue
         if part.get('Content-Disposition') == None:
             continue
+        print ("CD {}".foramt(part.get('Content-Disposition')))
         decoded_filename = part.get_filename()
         filename_header = None
         try:
@@ -315,16 +255,20 @@ def emailHandler(ev):
             att_filename = re.sub(r'[^.a-zA-Z0-9 :;,\.\?]', "_", filename_header.replace(":", "").replace("/", "").replace("\\", ""))
         else:
             att_filename = re.sub(r'[^.a-zA-Z0-9 :;,\.\?]', "_", decoded_filename.replace(":", "").replace("/", "").replace("\\", ""))
+        print("Att file name {}".format(att_filename))
 
-        if last_att_filename == att_filename:
-            att_filename = str(att_count) + "." + att_filename
-        
-        last_att_filename = att_filename
-        att_count += 1
+
+       #if last_att_filename == att_filename:
+       #    att_filename = str(att_count) + "." + att_filename
+       #
+       #last_att_filename = att_filename
+       #att_count += 1
             
 
-        att_path = os.path.join(folder, att_filename)
+        path = os.path.join(FOLDER_ROOT_DIR, folder)
+        att_path = os.path.join(path, att_filename)
 
+        print ("atth path {}".format(att_path))
         with open(att_path, 'wb') as att_file:
             try:
                 att_file.write(part.get_payload(decode=True))
@@ -334,7 +278,10 @@ def emailHandler(ev):
                 return False
             att_file.close()
         
-        content_of_mail['attachments'].append(att_filename)
+        if debug:
+          content_of_mail['attachments'].append(att_path)
+        else:
+          content_of_mail['attachments'].append(att_filename)
 
   mail_html_page = os.path.join(dstdir, "index.html")
   with open(mail_html_page, 'w') as mail_page:
@@ -368,7 +315,7 @@ def emailHandler(ev):
           strip_header = re.sub(r"(?i)<!DOCTYPE.*?>", "", strip_header, flags=re.DOTALL)
           strip_header = re.sub(r"(?i)POSITION: absolute;", "", strip_header, flags=re.DOTALL)
           strip_header = re.sub(r"(?i)TOP: .*?;", "", strip_header, flags=re.DOTALL)
-          mail_page.write(decodestring(strip_header))
+          mail_page.write(str(strip_header))
       elif content_of_mail['text']:
           mail_page.write("<pre>")
           strip_header = re.sub(r"(?i)<html>.*?<head>.*?</head>.*?<body>", "", content_of_mail['text'], flags=re.DOTALL)
@@ -376,7 +323,7 @@ def emailHandler(ev):
           strip_header = re.sub(r"(?i)<!DOCTYPE.*?>", "", strip_header, flags=re.DOTALL)
           strip_header = re.sub(r"(?i)POSITION: absolute;", "", strip_header, flags=re.DOTALL)
           strip_header = re.sub(r"(?i)TOP: .*?;", "", strip_header, flags=re.DOTALL)
-          mail_page.write(decodestring(strip_header))
+          mail_page.write(str(strip_header))
           mail_page.write("</pre>\n")
 
       if len(content_of_mail['attachments']) > 0:
@@ -384,7 +331,10 @@ def emailHandler(ev):
         mail_page.write("<table>\n")
         for att in content_of_mail['attachments']:
           mail_page.write("\t<tr>\n")
-          mail_page.write("\t\t<td><a href=" + '"/' + folder + '/' + att + '"' + ">" + att + "</a></td>\n")
+          if debug:
+            mail_page.write("\t\t<td><a href=" + '"' + att + '"' + ">" + att + "</a></td>\n")
+          else:
+            mail_page.write("\t\t<td><a href=" + '"/' + folder + '/' + att + '"' + ">" + att + "</a></td>\n")
           mail_page.write("\t</tr>\n")
         mail_page.write("</table>\n")
      
@@ -396,9 +346,24 @@ def emailHandler(ev):
 if __name__ == '__main__':
   parser = argparse.ArgumentParser(description='Redr-EmailHandler .')
   parser.add_argument('-i','--instance', help='Instance Num of this script ', required=True)
+  parser.add_argument('-d','--debug', help='email dump file', required=False)
   args = parser.parse_args()
   argsdict = vars(args)
   instance = argsdict['instance']
+ 
+  debugfile = ''
+  if 'debug' in argsdict:
+    debugfile = argsdict['debug']
+    logging.basicConfig(stream=sys.stdout,level=logging.DEBUG)
+
+    with open (debugfile, 'r') as f:
+      records = json.load(f)
+      ev = records[0]
+      f.close()
+      emailHandler(ev, debug=True)
+    exit() 
+    
+
 
   formatter = logging.Formatter('REDR-MAILHANDLER-['+instance+']:%(asctime)s %(levelname)s - %(message)s')
   hdlr = logging.handlers.RotatingFileHandler('/var/tmp/redrin_mailhandler_'+instance+'.log', maxBytes=FILESIZE, backupCount=10)
