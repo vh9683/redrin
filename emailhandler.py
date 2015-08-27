@@ -61,6 +61,8 @@ def returnHeader(title):
         <script src="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.5/js/bootstrap.min.js"></script>
 </head>
 <body>
+<div class="container">
+    <div class="jumbotron">
     <div class="row">
         <div class="col-md-12">
     """ % (imghead, title)
@@ -73,7 +75,9 @@ def returnFooter():
                 <hr />
                 <a href="http://redr.in/>Email Recodrer</a>
                 </div>
-            </body>
+               </div>
+             </div>
+           </body>
         </html>
     """
     return response
