@@ -212,17 +212,16 @@ def emailHandler(ev):
     logger.info("Destination folder : {} exists".format(dstdir))
     return False
 
-  #TODO make use of tempfile 
-  maildumpfile = os.path.join(dstdir, 'email.dump') 
-
-  edumpfp = open(maildumpfile, 'w')
-  edumpfp.write(ev['msg']['raw_msg'])
-  edumpfp.close()
-
   mail = email.message_from_string(ev['msg']['raw_msg'])
   if not mail:
     logger.info('Could not parse email')
     return False
+
+  #TODO make use of tempfile 
+  maildumpfile = os.path.join(dstdir, 'email.dump') 
+  edumpfp = open(maildumpfile, 'w')
+  edumpfp.write(mail)
+  edumpfp.close()
 
   mail_subject = decode_header(mail.get('Subject'))[0][0]
   mail_subject_encoding = decode_header(mail.get('Subject'))[0][1]
