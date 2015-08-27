@@ -20,6 +20,11 @@ from validate_email import validate_email
 import argparse
 import shutil
 import subprocess
+from email.header import decode_header
+from email.utils import parsedate
+import cgi
+from quopri import decodestring
+
 
 FILESIZE=1024*1024*1024 #1MB
 
