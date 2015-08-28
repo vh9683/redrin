@@ -376,8 +376,9 @@ if __name__ == '__main__':
   instance = argsdict['instance']
  
   debugfile = ''
-  if 'debug' in argsdict:
+  if 'debug' in argsdict and argsdict['debug'] is not None:
     debugfile = argsdict['debug']
+    print (debugfile)
     logging.basicConfig(stream=sys.stdout,level=logging.DEBUG)
 
     with open (debugfile, 'r') as f:
