@@ -200,8 +200,8 @@ class TokenHandler(tornado.web.RequestHandler):
             self.render('sorry.html',reason='Invalid PIN')
             return
         redrdb = self.settings['redrdb']
-        tdata = yield redrdb.links.find_one({'token': token})
-        if not tdata or pin != tdata['pin']:
+        tdata = yield redrdb.links.find_one({'$and': [{'token': token},{'pin': pin}]})
+        if not tdata:
             if 'X-Real-IP' in self.request.headers:
                 rclient.set(self.request.headers['X-Real-IP'],pickle.dumps('BadGuy'))
             self.render('sorry.html',reason='Invalid PIN')
@@ -279,7 +279,7 @@ class ApiHandler(tornado.web.RequestHandler):
         rclient = self.settings['rclient']
         folder = uuid.uuid4().hex
         yield redrdb.links.insert({'token': token, 'pin': pin, 'folder': folder})
-        self.write({'status': 200, 'url': self.request.host + '/' + token, 'pin': pin})
+        self.write({'status': 200, 'url': self.request.host + '/' + token, 'pin': pin, 'userid': token+pin})
         self.finish()
         return
 
@@ -388,8 +388,8 @@ class DeleteMailHandler(tornado.web.RequestHandler):
             self.render('sorry.html',reason='Invalid PIN')
             return
         redrdb = self.settings['redrdb']
-        tdata = yield redrdb.links.find_one({'token': token})
-        if not tdata or pin != tdata['pin']:
+        tdata = yield redrdb.links.find_one({'$and': [{'token': token},{'pin': pin}]})
+        if not tdata:
             if 'X-Real-IP' in self.request.headers:
                 rclient.set(self.request.headers['X-Real-IP'],pickle.dumps('BadGuy'))
             self.render('sorry.html',reason='Invalid PIN')
@@ -398,6 +398,7 @@ class DeleteMailHandler(tornado.web.RequestHandler):
         rclient.rpush('tokenfreelist',pickle.dumps(token))
         rclient.delete(tdata['folder'])
         rmtree(FOLDER_ROOT_DIR+tdata['folder'],ignore_errors=True)   
+        yield redrdb.links.remove({'$and': [{'token': token},{'pin': pin}]})
         self.render('success.html', reason='Successfully Deleted mail')
         return
 
@@ -425,7 +426,7 @@ application = tornado.web.Application([
     (r"/", MainHandler),
     (r"/([a-z]{4})", TokenHandler),
     (r"/([a-f0-9]{32})", UrlHandler),
-    (r"/([a-f0-9]{32})/(.*)", AttachmentHandler),
+    (r"/([a-f0-9]{32})/(.+)", AttachmentHandler),
     (r"/token", ApiHandler),
     (r"/mailer", RecvHandler),
     (r"/signup", SignupHandler),
