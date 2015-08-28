@@ -291,7 +291,7 @@ class UrlHandler(tornado.web.RequestHandler):
   def get(self,folder):
     dir = Path(FOLDER_ROOT_DIR + folder + '/index.html')
     if dir.exists():
-      self.render(dir.resolve())
+      self.render(str(dir.resolve()))
     else:
       self.render('sorry.html',reason='Not Found')
     return

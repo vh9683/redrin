@@ -305,7 +305,7 @@ def emailHandler(ev, debug=False):
       mail_page.write(returnHeader(mail_subject))
       mail_page.write("<table>\n")
       mail_page.write("\t<tr>\n")
-      mail_page.write("\t\t<td>From: </td>\n")
+      mail_page.write("\t\t<td>From:&nbsp</td>\n")
       mail_page.write("\t\t<td>" + mail_from + "</td>\n")
       mail_page.write("\t</tr>\n")
 
@@ -315,12 +315,12 @@ def emailHandler(ev, debug=False):
      #mail_page.write("\t</tr>\n")
 
       mail_page.write("\t<tr>\n")
-      mail_page.write("\t\t<td>Subject: </td>\n")
+      mail_page.write("\t\t<td>Subject:&nbsp</td>\n")
       mail_page.write("\t\t<td>" + mail_subject + "</td>\n")
       mail_page.write("\t</tr>\n")
 
       mail_page.write("\t<tr>\n")
-      mail_page.write("\t\t<td>Date: </td>\n")
+      mail_page.write("\t\t<td>Date:&nbsp</td>\n")
       mail_page.write("\t\t<td>" + mail_date + "</td>\n")
       mail_page.write("\t</tr>\n")
 
