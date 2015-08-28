@@ -152,12 +152,12 @@ def emailHandler(ev, debug=False):
             logger.info("getuserid failed\n")
             return False
 
-        tdata = redrdb.tokens.find_one({'token': token})
+        tdata = redrdb.links.find_one({'token': token})
         if not tdata:
             logger.info("No Data for token {}".format(token))
             return False
 
-        folder = tdata.get('tkey')
+        folder = tdata.get('folder')
         if folder is None:
             logger.info("No Folder {} Data for token {}".format(folder, token))
             return False

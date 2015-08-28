@@ -207,6 +207,7 @@ class TokenHandler(tornado.web.RequestHandler):
             self.render('sorry.html',reason='Invalid PIN')
             return
         fdata = {'pin': pin, 'token': token}
+        folder = tdata['folder']
         rclient.setex(folder,300,pickle.dumps(fdata))
         self.redirect('/'+tdata['folder'])
         return
@@ -315,7 +316,7 @@ class UrlHandler(tornado.web.RequestHandler):
    
         directory = Path(folpath + '/index.html')
         if directory.exists():
-            self.render('mail.html',source='/'+folder+'/index.html')
+            self.render(str(directory.resolve()))
         else:
             self.render('sorry.html',reason='Not Found')
         return
@@ -395,7 +396,7 @@ class DeleteMailHandler(tornado.web.RequestHandler):
             return
         rclient.delete(token)
         rclient.rpush('tokenfreelist',pickle.dumps(token))
-        rclient.delete(folder)
+        rclient.delete(tdata['folder'])
         rmtree(FOLDER_ROOT_DIR+tdata['folder'],ignore_errors=True)   
         self.render('success.html', reason='Successfully Deleted mail')
         return
