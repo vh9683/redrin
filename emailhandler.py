@@ -58,7 +58,18 @@ def returnHeader(title):
     return response
 
 
-def returnFooter():
+def getDeleteButton(token):
+    deletebut =  '''
+    <div class="col-lg-12" style="text-align:center">     
+        <a href="/delete?token={}" type="button" class="btn btn-danger" role="button"><span class="glyphicon glyphicon-trash">
+        </span> Delete This mail</a>
+    </div>
+    '''.format(token)
+    return deletebut
+
+
+def returnFooter(token):
+    button = getDeleteButton(token)
     response = """
                     </div>
                 <div class="col-md-8 col-md-offset-1 footer">
@@ -69,9 +80,10 @@ def returnFooter():
              </div>
             </div>
            </div>
+           %s
           </body>
         </html>
-    """
+    """ % button
     return response
 
 
@@ -149,6 +161,7 @@ def emailHandler(ev, debug=False):
 
     else:
         folder = 'test'
+        token = 'test123'
 
     dstdir = os.path.join(FOLDER_ROOT_DIR, folder)
 
@@ -342,7 +355,7 @@ def emailHandler(ev, debug=False):
                 mail_page.write("\t</tr>\n")
             mail_page.write("</table>\n")
 
-        mail_page.write(returnFooter())
+        mail_page.write(returnFooter(token))
 
         mail_page.close()
     return True
