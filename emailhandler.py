@@ -14,11 +14,20 @@ from redis import StrictRedis
 from shutil import rmtree
 import sys
 import uuid
+import pymongo
 
 
 FILESIZE = 1024 * 1024 * 1024  # 1MB
 
 instance = "0"
+
+try:
+    conn = pymongo.MongoClient()
+    print("Connected successfully!!!")
+except pymongo.errors.ConnectionFailure as e:
+    print("Could not connect to MongoDB: %s" % e)
+
+redrdb = conn.redrdb
 
 logger = logging.getLogger('mailHandler')
 logging.basicConfig(stream=sys.stdout, level=logging.DEBUG)
@@ -60,7 +69,7 @@ def returnHeader(title):
 
 def getDeleteButton(token):
     deletebut =  '''
-    <div class="col-lg-12" style="text-align:center">     
+    <div class="col-lg-12" style="text-align:right">     
         <a href="/delete?token={}" type="button" class="btn btn-danger" role="button"><span class="glyphicon glyphicon-trash">
         </span> Delete This mail</a>
     </div>
@@ -143,12 +152,10 @@ def emailHandler(ev, debug=False):
             logger.info("getuserid failed\n")
             return False
 
-        tdata = rclient.get(token)
+        tdata = redrdb.links.find_one({'token': token})
         if not tdata:
             logger.info("No Data for token {}".format(token))
             return False
-
-        tdata = pickle.loads(tdata)
 
         folder = tdata['folder']
         if folder is None:
