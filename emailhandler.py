@@ -71,16 +71,6 @@ def returnFooter():
     return response
 
 
-def decode_string(string):
-    return string
-    # for charset in ("utf-8", 'latin-1', 'iso-8859-1', 'us-ascii', 'windows-1252','us-ascii'):
-    #    try:
-    #        return cgi.escape(string).encode('ascii', 'xmlcharrefreplace')
-    #    except Exception:
-    #        continue
-    # raise ValueError("Could not decode string")
-
-
 def getdomain(a):
     return a.split('@')[-1]
 
@@ -246,12 +236,6 @@ def emailHandler(ev, debug=False):
                 att_filename = re.sub(
                     r'[^.a-zA-Z0-9 :;,\.\?]', "_", decoded_filename.replace(":", "").replace("/", "").replace("\\", ""))
 
-           # if last_att_filename == att_filename:
-           #    att_filename = str(att_count) + "." + att_filename
-           #
-           # last_att_filename = att_filename
-           # att_count += 1
-
             path = os.path.join(FOLDER_ROOT_DIR, folder)
             att_path = os.path.join(path, att_filename)
 
@@ -288,11 +272,6 @@ def emailHandler(ev, debug=False):
         mail_page.write("\t\t<td>From:&nbsp</td>\n")
         mail_page.write("\t\t<td>" + mail_from + "</td>\n")
         mail_page.write("\t</tr>\n")
-
-       # mail_page.write("\t<tr>\n")
-       # mail_page.write("\t\t<td>To: </td>\n")
-       # mail_page.write("\t\t<td>" + mail_to + "</td>\n")
-       # mail_page.write("\t</tr>\n")
 
         mail_page.write("\t<tr>\n")
         mail_page.write("\t\t<td>Subject:&nbsp</td>\n")
