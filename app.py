@@ -200,7 +200,7 @@ class TokenHandler(tornado.web.RequestHandler):
             self.render('sorry.html',reason='Invalid PIN')
             return
         redrdb = self.settings['redrdb']
-        link = yield redrdb.links.find_one({'token': token})
+        tdata = yield redrdb.links.find_one({'token': token})
         if not tdata or pin != tdata['pin']:
             if 'X-Real-IP' in self.request.headers:
                 rclient.set(self.request.headers['X-Real-IP'],pickle.dumps('BadGuy'))
