@@ -198,9 +198,8 @@ class TokenHandler(tornado.web.RequestHandler):
                 rclient.set(self.request.headers['X-Real-IP'],pickle.dumps('BadGuy'))
             self.render('sorry.html',reason='Invalid PIN')
             return
-        tdata = rclient.get(token)
-        if tdata:
-            tdata = pickle.loads(tdata)
+        redrdb = self.settings['redrdb']
+        link = yield redrdb.links.find_one({'token': token})
         if not tdata or pin != tdata['pin']:
             if 'X-Real-IP' in self.request.headers:
                 rclient.set(self.request.headers['X-Real-IP'],pickle.dumps('BadGuy'))
@@ -277,20 +276,36 @@ class ApiHandler(tornado.web.RequestHandler):
             return
         rclient = self.settings['rclient']
         folder = uuid.uuid4().hex
-        tdata = {'pin': pin, 'folder': folder}
-        gen_log.info('tdata ' + str(tdata))
-        rclient.setex(token,604800,pickle.dumps(tdata))
+        yield redrdb.links.insert({'token': token, 'pin': pin, 'folder': folder})
         self.write({'status': 200, 'url': self.request.host + '/' + token, 'pin': pin})
         self.finish()
         return
 
 class UrlHandler(tornado.web.RequestHandler):
+    def prepare(self):
+        rclient = self.settings['rclient']
+        if 'X-Real-IP' in self.request.headers:
+            badreq = rclient.get(self.request.headers['X-Real-IP'])
+            if badreq:
+                self.finish()
+                return None
+
+    @coroutine
     def get(self,folder):
         rclient = self.settings['rclient']
         fdata = rclient.get(folder)
         if not fdata:
-            self.render('sorry.html',reason='UnAuthorized Access')
-            return        
+            redrdb = self.settings['redrdb']
+            link = yield redrdb.links.find_one({'folder': folder})
+            if link:
+                self.redirect('/'+link['token'])
+            else:
+                if 'X-Real-IP' in self.request.headers:
+                    rclient.set(self.request.headers['X-Real-IP'],pickle.dumps('BadGuy'))
+                self.set_status(403)
+                self.write('Forbidden')
+                self.finish()                
+            return
         folpath = os.path.join(FOLDER_ROOT_DIR, folder)
         if not os.path.isdir(folpath):
             gen_log.info("sorry.html")
@@ -305,12 +320,30 @@ class UrlHandler(tornado.web.RequestHandler):
         return
 
 class AttachmentHandler(tornado.web.RequestHandler):
+    def prepare(self):
+        rclient = self.settings['rclient']
+        if 'X-Real-IP' in self.request.headers:
+            badreq = rclient.get(self.request.headers['X-Real-IP'])
+            if badreq:
+                self.finish()
+                return None
+
+    @coroutine
     def get(self,folder,filename):
         rclient = self.settings['rclient']
         fdata = rclient.get(folder)
         if not fdata:
-            self.render('sorry.html',reason='UnAuthorized Access')
-            return        
+            redrdb = self.settings['redrdb']
+            link = yield redrdb.links.find_one({'folder': folder})
+            if link:
+                self.redirect('/'+link['token'])
+            else:
+                if 'X-Real-IP' in self.request.headers:
+                    rclient.set(self.request.headers['X-Real-IP'],pickle.dumps('BadGuy'))
+                self.set_status(403)
+                self.write('Forbidden')
+                self.finish()                
+            return
         folpath = os.path.join(FOLDER_ROOT_DIR, folder)
         if not os.path.isdir(folpath):
             gen_log.info("sorry.html")
