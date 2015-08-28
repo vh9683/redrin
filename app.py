@@ -191,6 +191,7 @@ class TokenHandler(tornado.web.RequestHandler):
     return None
 
   def get(self,token):
+    gen_log.info("URI : {}".format(token))
     self.render('verify.html',url=self.request.uri)
 
   @coroutine
@@ -289,13 +290,23 @@ class ApiHandler(tornado.web.RequestHandler):
 
 class UrlHandler(tornado.web.RequestHandler):
   def get(self,folder):
-    dir = Path(FOLDER_ROOT_DIR + folder + '/index.html')
-    if dir.exists():
+    folpath = os.path.join(FOLDER_ROOT_DIR, folder)
+    if not os.path.isdir(folpath):
+      gen_log.info("sorry.html")
+      self.render('sorry.html',reason='Not Found')
+      return
+   
+    directory = Path(folpath + '/index.html')
+    if directory.exists():
       self.render('mail.html',source='/'+folder+'/index.html')
     else:
       self.render('sorry.html',reason='Not Found')
     return
 
+class MyStaticFileHandler(tornado.web.StaticFileHandler):
+    # Disable cache
+    def set_extra_headers(self, path):
+        self.set_header('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0')
 
 class MainHandler(tornado.web.RequestHandler):
   def get(self):
@@ -322,7 +333,7 @@ application = tornado.web.Application([
     (r"/token", ApiHandler),
     (r"/mailer", RecvHandler),
     (r"/signup", SignupHandler),
-    (r"/(.*)", tornado.web.StaticFileHandler,dict(path=settings['static_path'])),
+    (r"/(.*)", MyStaticFileHandler,dict(path=settings['static_path'])),
 ], **settings)
 
 if __name__ == "__main__":
