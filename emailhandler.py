@@ -70,7 +70,7 @@ def returnHeader(title):
 def getDeleteButton(token):
     deletebut =  '''
     <div class="col-lg-12" style="text-align:right">     
-        <a href="/delete?token={}" type="button" class="btn btn-danger" role="button"><span class="glyphicon glyphicon-trash">
+        <a href="/delete/{}" type="button" class="btn btn-danger" role="button"><span class="glyphicon glyphicon-trash">
         </span> Delete This mail</a>
     </div>
     '''.format(token)

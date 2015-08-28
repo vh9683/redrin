@@ -367,11 +367,12 @@ class DeleteMailHandler(tornado.web.RequestHandler):
                 self.finish()
                 return None
 
+    @coroutine
     def get(self,token):
         redrdb = self.settings['redrdb']
         tdata = yield redrdb.links.find_one({'token': token})
-        if not tdata or token != tdata['token']:
-          self.render('sorry.html',reason='Invalid MailID, Cannot Delete')
+        if not tdata:
+          self.render('sorry.html',reason='Invalid Token, Cannot Delete')
           return
         else:
           self.render('verify.html',url=self.request.uri)
@@ -392,10 +393,11 @@ class DeleteMailHandler(tornado.web.RequestHandler):
                 rclient.set(self.request.headers['X-Real-IP'],pickle.dumps('BadGuy'))
             self.render('sorry.html',reason='Invalid PIN')
             return
-        fdata = {'pin': pin, 'token': token}
+        rclient.delete(token)
+        rclient.rpush('tokenfreelist',pickle.dumps(token))
         rclient.delete(folder)
         rmtree(FOLDER_ROOT_DIR+tdata['folder'],ignore_errors=True)   
-        self.redirect('success.html', reason='Successfully Delete mail')
+        self.render('success.html', reason='Successfully Deleted mail')
         return
 
 
@@ -426,7 +428,7 @@ application = tornado.web.Application([
     (r"/token", ApiHandler),
     (r"/mailer", RecvHandler),
     (r"/signup", SignupHandler),
-    (r"/delete", DeleteMailHandler),
+    (r"/delete/([a-z]{4})", DeleteMailHandler),
     (r"/(.*)", tornado.web.StaticFileHandler,dict(path=settings['static_path'])),
 ], **settings)
 
