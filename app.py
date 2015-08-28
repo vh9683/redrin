@@ -17,6 +17,7 @@ from tornado.gen import coroutine
 from redis import StrictRedis
 from pathlib import Path
 from random import Random
+from shutil import rmtree
 
 OUR_DOMAIN = "redr.in"
 FOLDER_ROOT_DIR = "/tmp/redr/"
@@ -357,6 +358,48 @@ class AttachmentHandler(tornado.web.RequestHandler):
             self.render('sorry.html',reason='Not Found')
         return
 
+class DeleteMailHandler(tornado.web.RequestHandler):
+    def prepare(self):
+        rclient = self.settings['rclient']
+        if 'X-Real-IP' in self.request.headers:
+            badreq = rclient.get(self.request.headers['X-Real-IP'])
+            if badreq:
+                self.finish()
+                return None
+
+    def get(self,token):
+        redrdb = self.settings['redrdb']
+        tdata = yield redrdb.links.find_one({'token': token})
+        if not tdata or token != tdata['token']:
+          self.render('sorry.html',reason='Invalid MailID, Cannot Delete')
+          return
+        else:
+          self.render('verify.html',url=self.request.uri)
+
+    @coroutine
+    def post(self,token):
+        pin = self.get_argument('pin',None)
+        rclient = self.settings['rclient']
+        if not pin:
+            if 'X-Real-IP' in self.request.headers:
+                rclient.set(self.request.headers['X-Real-IP'],pickle.dumps('BadGuy'))
+            self.render('sorry.html',reason='Invalid PIN')
+            return
+        redrdb = self.settings['redrdb']
+        tdata = yield redrdb.links.find_one({'token': token})
+        if not tdata or pin != tdata['pin']:
+            if 'X-Real-IP' in self.request.headers:
+                rclient.set(self.request.headers['X-Real-IP'],pickle.dumps('BadGuy'))
+            self.render('sorry.html',reason='Invalid PIN')
+            return
+        fdata = {'pin': pin, 'token': token}
+        rclient.delete(folder)
+        rmtree(FOLDER_ROOT_DIR+tdata['folder'],ignore_errors=True)   
+        self.redirect('success.html', reason='Successfully Delete mail')
+        return
+
+
+
 class MainHandler(tornado.web.RequestHandler):
     def get(self):
         self.render("index.html")
@@ -383,6 +426,7 @@ application = tornado.web.Application([
     (r"/token", ApiHandler),
     (r"/mailer", RecvHandler),
     (r"/signup", SignupHandler),
+    (r"/delete", DeleteMailHandler),
     (r"/(.*)", tornado.web.StaticFileHandler,dict(path=settings['static_path'])),
 ], **settings)
 
