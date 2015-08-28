@@ -152,12 +152,12 @@ def emailHandler(ev, debug=False):
             logger.info("getuserid failed\n")
             return False
 
-        tdata = redrdb.links.find_one({'token': token})
+        tdata = redrdb.tokens.find_one({'token': token})
         if not tdata:
             logger.info("No Data for token {}".format(token))
             return False
 
-        folder = tdata['folder']
+        folder = tdata.get('tkey')
         if folder is None:
             logger.info("No Folder {} Data for token {}".format(folder, token))
             return False
@@ -293,7 +293,7 @@ def emailHandler(ev, debug=False):
         mail_page.write(returnHeader(mail_subject))
         mail_page.write("<table>\n")
         mail_page.write("\t<tr>\n")
-        mail_page.write("\t<h3>" + mail_subject + "</h3>\n")
+        #mail_page.write("\t<h3>" + mail_subject + "</h3>\n")
         mail_page.write("<ul>\n")
         mail_page.write("\t\t<td>From:&nbsp</td>\n")
         mail_page.write("\t\t<td>" + mail_from + "</td>\n")
