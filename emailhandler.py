@@ -50,6 +50,8 @@ def returnHeader(title):
         <script src="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.5/js/bootstrap.min.js"></script>
 </head>
 <body>
+ <div class="container">
+  <div class="jumbotron">
     <div class="row">
         <div class="col-md-12">
     """ % (imghead, title)
@@ -65,7 +67,9 @@ def returnFooter():
                 </div>
                </div>
              </div>
-           </body>
+            </div>
+           </div>
+          </body>
         </html>
     """
     return response
@@ -269,6 +273,8 @@ def emailHandler(ev, debug=False):
         mail_page.write(returnHeader(mail_subject))
         mail_page.write("<table>\n")
         mail_page.write("\t<tr>\n")
+        mail_page.write("\t<h3>" + mail_subject + "</h3>\n")
+        mail_page.write("<ul>\n")
         mail_page.write("\t\t<td>From:&nbsp</td>\n")
         mail_page.write("\t\t<td>" + mail_from + "</td>\n")
         mail_page.write("\t</tr>\n")
@@ -282,6 +288,7 @@ def emailHandler(ev, debug=False):
         mail_page.write("\t\t<td>Date:&nbsp</td>\n")
         mail_page.write("\t\t<td>" + mail_date + "</td>\n")
         mail_page.write("\t</tr>\n")
+        mail_page.write("</ul>\n")
 
         mail_page.write("</table>\n")
 
@@ -342,12 +349,17 @@ def emailHandler(ev, debug=False):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Redr-EmailHandler .')
+
     parser.add_argument(
         '-i', '--instance', help='Instance Num of this script ', required=True)
+
     parser.add_argument(
         '-d', '--debug', help='email dump file', required=False)
+
     args = parser.parse_args()
+
     argsdict = vars(args)
+
     instance = argsdict['instance']
 
     debugfile = ''
