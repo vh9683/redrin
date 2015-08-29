@@ -66,6 +66,18 @@ def returnHeader(title):
     """ % (imghead, title)
     return response
 
+def getGroupButton(token):
+    buttonGroup = '''
+    <div class="btn-group btn-group-lg">
+        <a href="/delete/{0}" type="button" class="btn btn-danger btn-md col-md-6" role="button">
+        <span class="glyphicon glyphicon-trash"></span>Delete This Mail</a>
+        <a href="/forwardmail/{0}" type="button" class="btn btn-primary btn-md col-md-6" role="button">
+        <span class="glyphicon glyphicon-envelope"></span>Forward This Mail To Your Personal Mail-Id</a>
+    </div>
+    '''.format(token)
+
+    return buttonGroup
+
 
 def getDeleteButton(token):
     deletebut =  '''
@@ -78,7 +90,7 @@ def getDeleteButton(token):
 
 
 def returnFooter(token):
-    button = getDeleteButton(token)
+    button = getGroupButton(token)
     response = """
                     </div>
                 <div class="col-md-8 col-md-offset-1 footer">
@@ -92,7 +104,7 @@ def returnFooter(token):
            %s
           </body>
         </html>
-    """ % button
+    """ % (button)
     return response
 
 

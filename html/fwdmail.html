@@ -52,9 +52,18 @@
                 <div class="row">
                     <div class="col-md-12 col-sm-12 col-xs-12">
                        <div class="about-item scrollpoint sp-effect2">
-                            <i class="fa fa-check-square-o fa-2x"></i>
-                            <h3>{{reason}}</h3>
-                       </div>
+                            <i class="fa fa-sign-in fa-2x"></i>
+                            <h3>Enter Your Email Address To Forward Your Email</h3>
+                            <form method="post" role="form" action={{url}}>
+                            <input type="email" class="form-control" id="email" name="email" placeholder="EMAIL"><br>
+
+                            <h3>Enter Your PIN</h3>
+                            <form method="post" role="form" action={{url}}>
+                            <input type="text" name="pin" placeholder="PIN"><br>
+
+                            <button type="submit" class="btn btn-default">Submit</button>
+                            </form>
+                        </div>
                     </div>
                 </div>
             </div>
