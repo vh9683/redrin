@@ -10,6 +10,8 @@ import base64
 import datetime
 import os
 import oath
+import email
+import smtplib
 from tornado.log import logging,gen_log
 from tornado.httpclient import AsyncHTTPClient
 from motor import MotorClient
@@ -18,6 +20,8 @@ from redis import StrictRedis
 from pathlib import Path
 from random import Random
 from shutil import rmtree
+from validate_email import validate_email
+
 
 OUR_DOMAIN = "redr.in"
 FOLDER_ROOT_DIR = "/tmp/redr/"
@@ -284,13 +288,13 @@ class ApiHandler(tornado.web.RequestHandler):
         return
 
 class UrlHandler(tornado.web.RequestHandler):
-    def prepare(self):
-        rclient = self.settings['rclient']
-        if 'X-Real-IP' in self.request.headers:
-            badreq = rclient.get(self.request.headers['X-Real-IP'])
-            if badreq:
-                self.finish()
-                return None
+    #def prepare(self):
+    #    rclient = self.settings['rclient']
+    #    if 'X-Real-IP' in self.request.headers:
+    #        badreq = rclient.get(self.request.headers['X-Real-IP'])
+    #        if badreq:
+    #            self.finish()
+    #            return None
 
     @coroutine
     def get(self,folder):
@@ -322,13 +326,13 @@ class UrlHandler(tornado.web.RequestHandler):
         return
 
 class AttachmentHandler(tornado.web.RequestHandler):
-    def prepare(self):
-        rclient = self.settings['rclient']
-        if 'X-Real-IP' in self.request.headers:
-            badreq = rclient.get(self.request.headers['X-Real-IP'])
-            if badreq:
-                self.finish()
-                return None
+    #def prepare(self):
+    #    rclient = self.settings['rclient']
+    #    if 'X-Real-IP' in self.request.headers:
+    #        badreq = rclient.get(self.request.headers['X-Real-IP'])
+    #        if badreq:
+    #            self.finish()
+    #            return None
 
     @coroutine
     def get(self,folder,filename):
@@ -360,13 +364,13 @@ class AttachmentHandler(tornado.web.RequestHandler):
         return
 
 class DeleteMailHandler(tornado.web.RequestHandler):
-    def prepare(self):
-        rclient = self.settings['rclient']
-        if 'X-Real-IP' in self.request.headers:
-            badreq = rclient.get(self.request.headers['X-Real-IP'])
-            if badreq:
-                self.finish()
-                return None
+    #def prepare(self):
+    #    rclient = self.settings['rclient']
+    #    if 'X-Real-IP' in self.request.headers:
+    #        badreq = rclient.get(self.request.headers['X-Real-IP'])
+    #        if badreq:
+    #            self.finish()
+    #            return None
 
     @coroutine
     def get(self,token):
@@ -403,6 +407,93 @@ class DeleteMailHandler(tornado.web.RequestHandler):
         return
 
 
+class ForwardMailHandler(tornado.web.RequestHandler):
+    #def prepare(self):
+    #    rclient = self.settings['rclient']
+    #    if 'X-Real-IP' in self.request.headers:
+    #        badreq = rclient.get(self.request.headers['X-Real-IP'])
+    #        if badreq:
+    #            self.finish()
+    #            return None
+
+    @coroutine
+    def get(self,token):
+        redrdb = self.settings['redrdb']
+        tdata = yield redrdb.links.find_one({'token': token})
+        self.render('fwdmail.html',url=self.request.uri)
+
+    @coroutine
+    def post(self,token):
+        rcptemail = self.get_argument('email',None)
+        pin = self.get_argument('pin',None)
+
+        if rcptemail is None or not validate_email(rcptemail):
+            self.render('sorry.html',reason='Invalid Email Id Cannot Forward Email To {}'.format(rcptemail))
+            return
+
+        rclient = self.settings['rclient']
+        if not pin:
+            if 'X-Real-IP' in self.request.headers:
+                rclient.set(self.request.headers['X-Real-IP'],pickle.dumps('BadGuy'))
+            self.render('sorry.html',reason='Invalid PIN')
+            return
+
+        redrdb = self.settings['redrdb']
+        tdata = yield redrdb.links.find_one({'$and': [{'token': token},{'pin': pin}]})
+        if not tdata:
+            if 'X-Real-IP' in self.request.headers:
+                rclient.set(self.request.headers['X-Real-IP'],pickle.dumps('BadGuy'))
+            self.render('sorry.html',reason='Invalid PIN')
+            return
+
+        # Fwd mailto mail address
+        emailfilepath = os.path.join(FOLDER_ROOT_DIR,  tdata['folder'])
+
+        emailfilepath = os.path.join(emailfilepath, 'email.dump')
+
+        gen_log.info("Emailfile :{}".format(emailfilepath))
+
+        mailstring = ""
+        with open(emailfilepath, 'r') as fp:
+          mailstring = fp.read()
+          fp.close()
+
+        mail = email.message_from_string(mailstring)
+
+        server = smtplib.SMTP('smtp.mandrillapp.com', 587)
+        try:
+          server.ehlo()
+
+          # If we can encrypt this session, do it
+          if server.has_extn('STARTTLS'):
+            server.starttls()
+            server.ehlo() # re-identify ourselves over TLS connection
+            server.login('vidyartibng@gmail.com', 'c3JOgoZZ9BmKN4swnnBEpQ')
+
+          gen_log.info('Fwd EmailId : {}'.format(rcptemail))
+
+          composed = mail.as_string()
+
+          sub = mail.get('Subject')
+          if not sub:
+            sub = "Email Forwarded from Redr.in"  
+          else:
+            del mail['Subject']
+            sub = "Fwd: " + sub
+            mail['Subject'] = sub
+
+          mail_from = email.utils.parseaddr(mail.get('From'))[1]
+
+          server.sendmail(mail_from, rcptemail, composed)
+          ## Should we Capture this mail if for data analysis
+          ## add for readdress.io
+        finally:
+          server.quit()
+
+        self.render('success.html', reason='Successfully Forwarded mail')
+        return
+
+
 
 class MainHandler(tornado.web.RequestHandler):
     def get(self):
@@ -430,6 +521,7 @@ application = tornado.web.Application([
     (r"/token", ApiHandler),
     (r"/mailer", RecvHandler),
     (r"/signup", SignupHandler),
+    (r"/forwardmail/(.*)", ForwardMailHandler),
     (r"/delete/([a-z]{4})", DeleteMailHandler),
     (r"/(.*)", tornado.web.StaticFileHandler,dict(path=settings['static_path'])),
 ], **settings)
