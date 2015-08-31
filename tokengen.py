@@ -26,7 +26,9 @@ while len(tokens) < (26**4):
   token = newtempname()
   if token not in tokens:
     tokens.add(token)
-    db.tokens.insert({'token': token, "tokenid": counter, "usecount": 0})
+    tdata = {'token': token, "tokenid": counter, "usecount": random.randint(0,10**6)}
+    db.tokens.insert(tdata)
+    print(str(tdata))
     counter = counter + 1
 
 key = uuid.uuid4().hex
@@ -38,6 +40,7 @@ while len(pins) < (10**6):
     if pin not in pins:
         pins.add(pin)
         db.pins.insert({"pin": pin, "pinid": counter})
+        print('added pin ' + pin + ' pinid ' + str(counter))
         counter = counter + 1
     attempts = attempts + 1
 

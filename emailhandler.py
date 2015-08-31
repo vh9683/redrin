@@ -15,6 +15,7 @@ from shutil import rmtree
 import sys
 import uuid
 import pymongo
+import base64
 
 
 FILESIZE = 1024 * 1024 * 1024  # 1MB
@@ -159,27 +160,22 @@ def emailHandler(ev, debug=False):
             logger.info("Not Our Domain \n")
             return False
 
-        token = getuserid(to)
+        folder = getuserid(to)
         if not token:
             logger.info("getuserid failed\n")
             return False
 
-        pin = token[4:]
-        token = token[:4]
-        tdata = redrdb.links.find_one({'$and': [{'token': token},{'pin':pin}]})
+        fdata = base64.b32decode(folder.encode()).decode()
+        pin = fdata[4:]
+        token = fdata[:4]
+        tdata = redrdb.tokens.find_one({'token': token})
         if not tdata:
             logger.info("No Data for token {}".format(token))
             return False
-
-        folder = tdata['folder']
-        if folder is None:
-            logger.info("No Folder {} Data for token {}".format(folder, token))
+        pdata = redrdb.pins.find_one({'pin': pin})
+        if not pdata:
+            logger.info("No Data for token {}".format(token))
             return False
-
-        if not valid_uuid4(folder):
-            logger.info("Folder {} is not valid uuid \n".format(folder))
-            return False
-
     else:
         folder = 'test'
         token = 'test123'
