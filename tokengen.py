@@ -20,25 +20,26 @@ except pymongo.errors.ConnectionFailure as e:
 
 db = conn.redrdb
 tokens = set()
+counter = 0
 
 while len(tokens) < (26**4):
   token = newtempname()
   if token not in tokens:
     tokens.add(token)
+    db.tokens.insert({'token': token, "tokenid": counter, "usecount": 0})
+    counter = counter + 1
 
+key = uuid.uuid4().hex
+pins = set()
+attempts = 1
 counter = 0
-for token in tokens:
-  key = uuid.uuid4().hex
-  pins = set()
-  attempts = 1
-  while len(pins) < (10**6):
+while len(pins) < (10**6):
     pin = oath.hotp(key,attempts)
     if pin not in pins:
-      pdata = {'token': token, 'pin': pin, 'linkid': counter}
-      pins.add(pin)
-      db.tokens.insert(pdata)
-      counter = counter + 1
+        pins.add(pin)
+        db.pins.insert({"pin": pin, "pinid": counter})
+        counter = counter + 1
     attempts = attempts + 1
-  del pins
+
   
 print('Done.')

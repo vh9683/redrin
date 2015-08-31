@@ -18,20 +18,13 @@ from motor import MotorClient
 from tornado.gen import coroutine
 from redis import StrictRedis
 from pathlib import Path
-from random import Random
+from random import Random,randint
 from shutil import rmtree
 from validate_email import validate_email
 
 
 OUR_DOMAIN = "redr.in"
 FOLDER_ROOT_DIR = "/tmp/redr/"
-
-if hasattr(os, 'TMP_MAX'):
-    TMP_MAX = os.TMP_MAX
-else:
-    TMP_MAX = 10000
-
-characters = "abcdefghijklmnopqrstuvwxyz"
 
 class SignupHandler(tornado.web.RequestHandler):
     def authenticatepost(self):
@@ -204,53 +197,29 @@ class TokenHandler(tornado.web.RequestHandler):
             self.render('sorry.html',reason='Invalid PIN')
             return
         redrdb = self.settings['redrdb']
-        tdata = yield redrdb.links.find_one({'$and': [{'token': token},{'pin': pin}]})
+        tdata = yield redrdb.tokens.find_one({'token': token})
         if not tdata:
             if 'X-Real-IP' in self.request.headers:
                 rclient.set(self.request.headers['X-Real-IP'],pickle.dumps('BadGuy'))
             self.render('sorry.html',reason='Invalid PIN')
             return
-        fdata = {'pin': pin, 'token': token}
-        folder = tdata['folder']
-        rclient.setex(folder,300,pickle.dumps(fdata))
-        self.redirect('/'+tdata['folder'])
+        pdata = yield redrdb.pins.find_one({"pin": pin})
+        if not pdata:
+            if 'X-Real-IP' in self.request.headers:
+                rclient.set(self.request.headers['X-Real-IP'],pickle.dumps('BadGuy'))
+            self.render('sorry.html',reason='Invalid PIN')
+            return
+        if pdata['pinid'] > tdata['usecount']:
+            if 'X-Real-IP' in self.request.headers:
+                rclient.set(self.request.headers['X-Real-IP'],pickle.dumps('BadGuy'))
+            self.render('sorry.html',reason='Invalid PIN')
+            return
+        folder = base64.b32encode((token+pin).encode()).decode()
+        rclient.setex(folder,300,pickle.dumps(token+pin))
+        self.redirect('/'+folder)
         return
 
 class ApiHandler(tornado.web.RequestHandler):
-    def newtempname(self,ln=4):
-        choose = Random().choice
-        letters = [choose(characters) for dummy in range(ln)]
-        return ''.join(letters)
-
-    def newtoken(self):
-        rclient = self.settings['rclient']
-        for seq in range(TMP_MAX):
-            name = self.newtempname()
-            inuse = rclient.get(name)
-            if not inuse:
-                return name
-            else:
-                continue    # try again
-        return None
-
-    def gettoken(self):
-        rclient = self.settings['rclient']
-        token = rclient.lpop('tokenfreelist')
-        if not token:
-            return self.newtoken()
-        return pickle.loads(token)
-
-    @coroutine
-    def getpin(self,reused,token):
-        tkey = reused['tkey']
-        for seq in range(TMP_MAX):
-            usecount = reused['usecount'] + 1
-            pin = oath.hotp(tkey,usecount)
-            if not 'pins' in reused or pin not in reused['pins']:
-                yield redrdb.tokens.update({'token': token},{'$set': {'usecount': usecount}, '$push': {'pins': pin}})
-                return pin
-        return None
-
     @coroutine
     def get(self):
         apikey = self.get_argument('apikey',False)
@@ -264,45 +233,46 @@ class ApiHandler(tornado.web.RequestHandler):
             self.write({'status': 401})
             self.finish()
             return
-        token = self.gettoken()
+        rclient = self.settings['rclient']
+        lasttid = rclient.get('lasttokenid')
+        if not lasttid:
+            lasttid = 0
+        else:
+            lasttid = pickle.loads(lasttid)
+        rclient.set('lasttokenid',pickle.dumps((lasttid+1)%(26**4)))
+        token = redrdb.tokens.find_and_modify({'query': {'tokenid': lasttid}, 'sort': {'usecount': 1}, 'update': {'$inc': {'usecount': 1}}})
         if not token:
             self.write({'status': 500})
             self.finish()
             return
-        reused = yield redrdb.tokens.find_one({'token': token})
-        if not reused:
-            usecount = 0
-            tkey = uuid.uuid4().hex
-            yield redrdb.tokens.insert({'token': token, 'usecount': usecount, 'tkey': tkey})
-            reused = yield redrdb.tokens.find_one({'token': token})
-        pin = yield self.getpin(reused,token)
+        pin = yield redrdb.pins.find_one({'pinid': token['usecount']})
         if not pin:
             self.write({'status': 500})
             self.finish()
             return
-        rclient = self.settings['rclient']
-        folder = uuid.uuid4().hex
-        yield redrdb.links.insert({'token': token, 'pin': pin, 'folder': folder})
-        self.write({'status': 200, 'url': self.request.host + '/' + token, 'pin': pin, 'userid': token+pin})
+        
+        folder = base64.b32encode((token+pin).encode()).decode()
+        self.write({'status': 200, 'url': self.request.host + '/' + token, 'pin': pin, 'userid': folder})
         self.finish()
         return
 
 class UrlHandler(tornado.web.RequestHandler):
-    #def prepare(self):
-    #    rclient = self.settings['rclient']
-    #    if 'X-Real-IP' in self.request.headers:
-    #        badreq = rclient.get(self.request.headers['X-Real-IP'])
-    #        if badreq:
-    #            self.finish()
-    #            return None
+    def prepare(self):
+        rclient = self.settings['rclient']
+        if 'X-Real-IP' in self.request.headers:
+            badreq = rclient.get(self.request.headers['X-Real-IP'])
+            if badreq:
+                self.finish()
+                return None
 
     @coroutine
     def get(self,folder):
         rclient = self.settings['rclient']
         fdata = rclient.get(folder)
         if not fdata:
+            tpin = base64.b32decode(folder.encode()).decode()
             redrdb = self.settings['redrdb']
-            link = yield redrdb.links.find_one({'folder': folder})
+            link = yield redrdb.tokens.find_one({'token': tpin[:4]})
             if link:
                 self.redirect('/'+link['token'])
             else:
@@ -326,21 +296,22 @@ class UrlHandler(tornado.web.RequestHandler):
         return
 
 class AttachmentHandler(tornado.web.RequestHandler):
-    #def prepare(self):
-    #    rclient = self.settings['rclient']
-    #    if 'X-Real-IP' in self.request.headers:
-    #        badreq = rclient.get(self.request.headers['X-Real-IP'])
-    #        if badreq:
-    #            self.finish()
-    #            return None
+    def prepare(self):
+        rclient = self.settings['rclient']
+        if 'X-Real-IP' in self.request.headers:
+            badreq = rclient.get(self.request.headers['X-Real-IP'])
+            if badreq:
+                self.finish()
+                return None
 
     @coroutine
     def get(self,folder,filename):
         rclient = self.settings['rclient']
         fdata = rclient.get(folder)
         if not fdata:
+            tpin = base64.b32decode(folder.encode()).decode()
             redrdb = self.settings['redrdb']
-            link = yield redrdb.links.find_one({'folder': folder})
+            link = yield redrdb.tokens.find_one({'token': tpin[:4]})
             if link:
                 self.redirect('/'+link['token'])
             else:
@@ -349,6 +320,10 @@ class AttachmentHandler(tornado.web.RequestHandler):
                 self.set_status(403)
                 self.write('Forbidden')
                 self.finish()                
+            return
+        if not filename:
+            gen_log.info("sorry.html")
+            self.render('sorry.html',reason='Not Found')
             return
         folpath = os.path.join(FOLDER_ROOT_DIR, folder)
         if not os.path.isdir(folpath):
@@ -364,18 +339,18 @@ class AttachmentHandler(tornado.web.RequestHandler):
         return
 
 class DeleteMailHandler(tornado.web.RequestHandler):
-    #def prepare(self):
-    #    rclient = self.settings['rclient']
-    #    if 'X-Real-IP' in self.request.headers:
-    #        badreq = rclient.get(self.request.headers['X-Real-IP'])
-    #        if badreq:
-    #            self.finish()
-    #            return None
+    def prepare(self):
+        rclient = self.settings['rclient']
+        if 'X-Real-IP' in self.request.headers:
+            badreq = rclient.get(self.request.headers['X-Real-IP'])
+            if badreq:
+                self.finish()
+                return None
 
     @coroutine
     def get(self,token):
         redrdb = self.settings['redrdb']
-        tdata = yield redrdb.links.find_one({'token': token})
+        tdata = yield redrdb.tokens.find_one({'token': token})
         if not tdata:
           self.render('sorry.html',reason='Invalid Token, Cannot Delete')
           return
@@ -392,34 +367,41 @@ class DeleteMailHandler(tornado.web.RequestHandler):
             self.render('sorry.html',reason='Invalid PIN')
             return
         redrdb = self.settings['redrdb']
-        tdata = yield redrdb.links.find_one({'$and': [{'token': token},{'pin': pin}]})
+        tdata = yield redrdb.tokens.find_one({'token': token})
         if not tdata:
             if 'X-Real-IP' in self.request.headers:
                 rclient.set(self.request.headers['X-Real-IP'],pickle.dumps('BadGuy'))
             self.render('sorry.html',reason='Invalid PIN')
             return
-        rclient.delete(token)
-        rclient.rpush('tokenfreelist',pickle.dumps(token))
-        rclient.delete(tdata['folder'])
-        rmtree(FOLDER_ROOT_DIR+tdata['folder'],ignore_errors=True)   
-        yield redrdb.links.remove({'$and': [{'token': token},{'pin': pin}]})
+        pdata = yield redrdb.pins.find_one({'pin': pin})
+        if not pdata:
+            if 'X-Real-IP' in self.request.headers:
+                rclient.set(self.request.headers['X-Real-IP'],pickle.dumps('BadGuy'))
+            self.render('sorry.html',reason='Invalid PIN')
+            return
+        if pdata['pinid'] > tdata['usecount']:
+            if 'X-Real-IP' in self.request.headers:
+                rclient.set(self.request.headers['X-Real-IP'],pickle.dumps('BadGuy'))
+            self.render('sorry.html',reason='Invalid PIN')
+            return
+        folder = base64.b32encode((tdata['token']+pdata['pin']).encode()).decode()
+        rclient.delete(folder)
+        rmtree(FOLDER_ROOT_DIR+folder,ignore_errors=True)   
         self.render('success.html', reason='Successfully Deleted mail')
         return
 
 
 class ForwardMailHandler(tornado.web.RequestHandler):
-    #def prepare(self):
-    #    rclient = self.settings['rclient']
-    #    if 'X-Real-IP' in self.request.headers:
-    #        badreq = rclient.get(self.request.headers['X-Real-IP'])
-    #        if badreq:
-    #            self.finish()
-    #            return None
+    def prepare(self):
+        rclient = self.settings['rclient']
+        if 'X-Real-IP' in self.request.headers:
+            badreq = rclient.get(self.request.headers['X-Real-IP'])
+            if badreq:
+                self.finish()
+                return None
 
     @coroutine
     def get(self,token):
-        redrdb = self.settings['redrdb']
-        tdata = yield redrdb.links.find_one({'token': token})
         self.render('fwdmail.html',url=self.request.uri)
 
     @coroutine
@@ -430,8 +412,7 @@ class ForwardMailHandler(tornado.web.RequestHandler):
         if rcptemail is None or not validate_email(rcptemail):
             self.render('sorry.html',reason='Invalid Email Id Cannot Forward Email To {}'.format(rcptemail))
             return
-
-        rclient = self.settings['rclient']
+        
         if not pin:
             if 'X-Real-IP' in self.request.headers:
                 rclient.set(self.request.headers['X-Real-IP'],pickle.dumps('BadGuy'))
@@ -439,13 +420,30 @@ class ForwardMailHandler(tornado.web.RequestHandler):
             return
 
         redrdb = self.settings['redrdb']
-        tdata = yield redrdb.links.find_one({'$and': [{'token': token},{'pin': pin}]})
+        tdata = yield redrdb.tokens.find_one({'token': token})
         if not tdata:
             if 'X-Real-IP' in self.request.headers:
                 rclient.set(self.request.headers['X-Real-IP'],pickle.dumps('BadGuy'))
             self.render('sorry.html',reason='Invalid PIN')
             return
+        pdata = yield redrdb.pins.find_one({'pin': pin})
+        if not pdata:
+            if 'X-Real-IP' in self.request.headers:
+                rclient.set(self.request.headers['X-Real-IP'],pickle.dumps('BadGuy'))
+            self.render('sorry.html',reason='Invalid PIN')
+            return
+        if pdata['pinid'] > tdata['usecount']:
+            if 'X-Real-IP' in self.request.headers:
+                rclient.set(self.request.headers['X-Real-IP'],pickle.dumps('BadGuy'))
+            self.render('sorry.html',reason='Invalid PIN')
+            return
 
+        rclient = self.settings['rclient']
+        folder = base64.b32encode((token+pin).encode()).decode()
+        fdata = rclient.get(folder)
+        if not fdata:
+            self.redirect('/'+token)
+            return
         # Fwd mailto mail address
         emailfilepath = os.path.join(FOLDER_ROOT_DIR,  tdata['folder'])
 
@@ -517,7 +515,7 @@ application = tornado.web.Application([
     (r"/", MainHandler),
     (r"/([a-z]{4})", TokenHandler),
     (r"/([a-f0-9]{32})", UrlHandler),
-    (r"/([a-f0-9]{32})/(.+)", AttachmentHandler),
+    (r"/([a-f0-9]{32})/(.*)", AttachmentHandler),
     (r"/token", ApiHandler),
     (r"/mailer", RecvHandler),
     (r"/signup", SignupHandler),
