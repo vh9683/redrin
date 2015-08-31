@@ -209,6 +209,11 @@ class TokenHandler(tornado.web.RequestHandler):
                 rclient.set(self.request.headers['X-Real-IP'],pickle.dumps('BadGuy'))
             self.render('sorry.html',reason='Invalid PIN')
             return
+        if pin > tdata['usecount'] and pin < tdata['seed']: # unused territory
+            if 'X-Real-IP' in self.request.headers:
+                rclient.set(self.request.headers['X-Real-IP'],pickle.dumps('BadGuy'))
+            self.render('sorry.html',reason='Invalid PIN')
+            return
         folder = base64.b32encode((token+pin).encode()).decode()
         rclient.setex(folder,300,pickle.dumps(token+pin))
         self.redirect('/'+folder)
@@ -378,6 +383,11 @@ class DeleteMailHandler(tornado.web.RequestHandler):
                 rclient.set(self.request.headers['X-Real-IP'],pickle.dumps('BadGuy'))
             self.render('sorry.html',reason='Invalid PIN')
             return
+        if pin > tdata['usecount'] and pin < tdata['seed']: # unused territory
+            if 'X-Real-IP' in self.request.headers:
+                rclient.set(self.request.headers['X-Real-IP'],pickle.dumps('BadGuy'))
+            self.render('sorry.html',reason='Invalid PIN')
+            return
         folder = base64.b32encode((tdata['token']+pdata['pin']).encode()).decode()
         rclient.delete(folder)
         rmtree(FOLDER_ROOT_DIR+folder,ignore_errors=True)   
@@ -422,6 +432,11 @@ class ForwardMailHandler(tornado.web.RequestHandler):
             return
         pdata = yield redrdb.pins.find_one({'pin': pin})
         if not pdata:
+            if 'X-Real-IP' in self.request.headers:
+                rclient.set(self.request.headers['X-Real-IP'],pickle.dumps('BadGuy'))
+            self.render('sorry.html',reason='Invalid PIN')
+            return
+        if pin > tdata['usecount'] and pin < tdata['seed']: # unused territory
             if 'X-Real-IP' in self.request.headers:
                 rclient.set(self.request.headers['X-Real-IP'],pickle.dumps('BadGuy'))
             self.render('sorry.html',reason='Invalid PIN')
@@ -503,8 +518,8 @@ settings = {"static_path": FOLDER_ROOT_DIR,
 application = tornado.web.Application([
     (r"/", MainHandler),
     (r"/([a-z]{4})", TokenHandler),
-    (r"/([a-f0-9]{32})", UrlHandler),
-    (r"/([a-f0-9]{32})/(.*)", AttachmentHandler),
+    (r"/([A-Z2-7]{16})", UrlHandler),
+    (r"/([A-Z2-7]{16})/(.*)", AttachmentHandler),
     (r"/token", ApiHandler),
     (r"/mailer", RecvHandler),
     (r"/signup", SignupHandler),

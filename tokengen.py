@@ -22,11 +22,12 @@ db = conn.redrdb
 tokens = set()
 counter = 0
 
-while len(tokens) < (26**4):
+while len(tokens) < ((26**4)*0.9):
   token = newtempname()
   if token not in tokens:
     tokens.add(token)
-    tdata = {'token': token, "tokenid": counter, "usecount": random.randint(0,10**6)}
+    seed = random.randint(0,(10**6)*0.9)
+    tdata = {'token': token, "tokenid": counter, "usecount": seed, 'seed': seed}
     db.tokens.insert(tdata)
     print(str(tdata))
     counter = counter + 1
