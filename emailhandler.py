@@ -161,7 +161,7 @@ def emailHandler(ev, debug=False):
             return False
 
         folder = getuserid(to)
-        if not token:
+        if not folder:
             logger.info("getuserid failed\n")
             return False
 

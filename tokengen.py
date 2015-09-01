@@ -36,7 +36,7 @@ key = uuid.uuid4().hex
 pins = set()
 attempts = 1
 counter = 0
-while len(pins) < (10**6):
+while len(pins) < ((10**6)*0.9):
     pin = oath.hotp(key,attempts)
     if pin not in pins:
         pins.add(pin)

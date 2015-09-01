@@ -209,7 +209,7 @@ class TokenHandler(tornado.web.RequestHandler):
                 rclient.set(self.request.headers['X-Real-IP'],pickle.dumps('BadGuy'))
             self.render('sorry.html',reason='Invalid PIN')
             return
-        if pin > tdata['usecount'] and pin < tdata['seed']: # unused territory
+        if int(pin) > tdata['usecount'] and int(pin) < tdata['seed']: # unused territory
             if 'X-Real-IP' in self.request.headers:
                 rclient.set(self.request.headers['X-Real-IP'],pickle.dumps('BadGuy'))
             self.render('sorry.html',reason='Invalid PIN')
