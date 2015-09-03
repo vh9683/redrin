@@ -43,11 +43,6 @@ rclient = StrictRedis()
 
 
 def returnHeader(title):
-    imghead = '''
-    <style>
-    img { max-width: 100%; height: auto; }
-    </style>
-    '''
     response = """
 <!DOCTYPE html>
 <html lang="en">
@@ -58,7 +53,7 @@ def returnHeader(title):
 <body>
     <div class="row">
         <div class="col-md-12">
-    """ % (imghead, title)
+    """ % (title)
     return response
 
 def getGroupButton(token):
@@ -76,13 +71,10 @@ def getGroupButton(token):
 
 def getButtons(token):
     buttons =  '''
-    <div class="col-lg-12" style="text-align:left">     
+    <div style="text-align:left">     
         <a href="/delete/{0}">
             <button>Delete This mail</button>
         </a>
-    </div>
-
-    <div class="col-lg-12" style="text-align:left">     
         <a href="/forward/{0}">
             <button>Forward This Mail To Your Personal Mail-Id</button>
         </a>
@@ -95,10 +87,6 @@ def returnFooter(token):
     buttons = getButtons(token)
     response = """
                     </div>
-                <div class="col-md-8 col-md-offset-1 footer">
-                <hr />
-                <a href="http://redr.in/>Email Recodrer</a>
-                </div>
                </div>
              </div>
            %s
