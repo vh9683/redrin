@@ -406,95 +406,14 @@ class ForwardMailHandler(tornado.web.RequestHandler):
 
     @coroutine
     def get(self,token):
-        self.render('fwdmail.html',url=self.request.uri)
-
-    @coroutine
-    def post(self,token):
-        rcptemail = self.get_argument('email',None)
-        pin = self.get_argument('pin',None)
-
-        if rcptemail is None or not validate_email(rcptemail):
-            self.render('sorry.html',reason='Invalid Email Id Cannot Forward Email To {}'.format(rcptemail))
-            return
-        
-        if not pin:
-            if 'X-Real-IP' in self.request.headers:
-                rclient.set(self.request.headers['X-Real-IP'],pickle.dumps('BadGuy'))
-            self.render('sorry.html',reason='Invalid PIN')
-            return
-
+        #Need to validate token and pin?
         redrdb = self.settings['redrdb']
         tdata = yield redrdb.tokens.find_one({'token': token})
         if not tdata:
-            if 'X-Real-IP' in self.request.headers:
-                rclient.set(self.request.headers['X-Real-IP'],pickle.dumps('BadGuy'))
-            self.render('sorry.html',reason='Invalid PIN')
-            return
-        pdata = yield redrdb.pins.find_one({'pin': pin})
-        if not pdata:
-            if 'X-Real-IP' in self.request.headers:
-                rclient.set(self.request.headers['X-Real-IP'],pickle.dumps('BadGuy'))
-            self.render('sorry.html',reason='Invalid PIN')
-            return
-        if pin > tdata['usecount'] and pin < tdata['seed']: # unused territory
-            if 'X-Real-IP' in self.request.headers:
-                rclient.set(self.request.headers['X-Real-IP'],pickle.dumps('BadGuy'))
-            self.render('sorry.html',reason='Invalid PIN')
-            return
-
-        rclient = self.settings['rclient']
-        folder = base64.b32encode((token+pin).encode()).decode()
-        fdata = rclient.get(folder)
-        if not fdata:
-            self.redirect('/'+token)
-            return
-        # Fwd mailto mail address
-        emailfilepath = os.path.join(FOLDER_ROOT_DIR,  tdata['folder'])
-
-        emailfilepath = os.path.join(emailfilepath, 'email.dump')
-
-        gen_log.info("Emailfile :{}".format(emailfilepath))
-
-        mailstring = ""
-        with open(emailfilepath, 'r') as fp:
-          mailstring = fp.read()
-          fp.close()
-
-        mail = email.message_from_string(mailstring)
-
-        server = smtplib.SMTP('smtp.mandrillapp.com', 587)
-        try:
-          server.ehlo()
-
-          # If we can encrypt this session, do it
-          if server.has_extn('STARTTLS'):
-            server.starttls()
-            server.ehlo() # re-identify ourselves over TLS connection
-            server.login('vidyartibng@gmail.com', 'c3JOgoZZ9BmKN4swnnBEpQ')
-
-          gen_log.info('Fwd EmailId : {}'.format(rcptemail))
-
-          composed = mail.as_string()
-
-          sub = mail.get('Subject')
-          if not sub:
-            sub = "Email Forwarded from Redr.in"  
-          else:
-            del mail['Subject']
-            sub = "Fwd: " + sub
-            mail['Subject'] = sub
-
-          mail_from = email.utils.parseaddr(mail.get('From'))[1]
-
-          server.sendmail(mail_from, rcptemail, composed)
-          ## Should we Capture this mail if for data analysis
-          ## add for readdress.io
-        finally:
-          server.quit()
-
-        self.render('success.html', reason='Successfully Forwarded mail')
-        return
-
+          self.render('sorry.html',reason='Invalid Token, Cannot Delete')
+          return
+        else:
+            self.render('fwdmail.html',url=self.request.uri)
 
 
 class MainHandler(tornado.web.RequestHandler):

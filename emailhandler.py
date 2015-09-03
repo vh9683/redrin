@@ -54,14 +54,8 @@ def returnHeader(title):
 %s
 <head>
         <title>%s</title>
-        <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.5/css/bootstrap.min.css" media="all" />
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <script src="https://ajax.googleapis.com/ajax/libs/jquery/1.11.3/jquery.min.js"></script>
-        <script src="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.5/js/bootstrap.min.js"></script>
 </head>
 <body>
- <div class="container">
-  <div class="jumbotron">
     <div class="row">
         <div class="col-md-12">
     """ % (imghead, title)
@@ -80,18 +74,25 @@ def getGroupButton(token):
     return buttonGroup
 
 
-def getDeleteButton(token):
-    deletebut =  '''
+def getButtons(token):
+    buttons =  '''
     <div class="col-lg-12" style="text-align:left">     
-        <a href="/delete/{}" type="button" class="btn btn-danger" role="button"><span class="glyphicon glyphicon-trash">
-        </span> Delete This mail</a>
+        <a href="/delete/{0}">
+            <button>Delete This mail</button>
+        </a>
+    </div>
+
+    <div class="col-lg-12" style="text-align:left">     
+        <a href="/forward/{0}">
+            <button>Forward This Mail To Your Personal Mail-Id</button>
+        </a>
     </div>
     '''.format(token)
-    return deletebut
+    return buttons
 
 
 def returnFooter(token):
-    button = getGroupButton(token)
+    buttons = getButtons(token)
     response = """
                     </div>
                 <div class="col-md-8 col-md-offset-1 footer">
@@ -100,12 +101,10 @@ def returnFooter(token):
                 </div>
                </div>
              </div>
-            </div>
-           </div>
            %s
           </body>
         </html>
-    """ % (button)
+    """ % (buttons)
     return response
 
 
